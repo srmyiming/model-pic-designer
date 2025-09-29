@@ -22,13 +22,13 @@ const categoryColors = {
 };
 
 const categoryLabels = {
-  screen: 'Pantalla',
-  hardware: 'Hardware',
-  protection: 'Protección',
-  camera: 'Cámara',
-  audio: 'Audio',
-  buttons: 'Botones',
-  system: 'Sistema',
+  screen: '屏幕',
+  hardware: '硬件',
+  protection: '保护',
+  camera: '摄像头',
+  audio: '音频',
+  buttons: '按键',
+  system: '系统',
 };
 
 export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelectorProps) => {
@@ -110,11 +110,11 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
                 {hasCustomImage ? (
                   <div className="flex items-center gap-2 text-success text-xs">
                     <Check className="h-3 w-3" />
-                    <span>Imagen personalizada cargada</span>
+                    <span>自定义图片已上传</span>
                   </div>
                 ) : (
                   <div className="text-xs text-muted-foreground">
-                    Sin imagen personalizada
+                    无自定义图片
                   </div>
                 )}
                 
@@ -136,7 +136,7 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
                 >
                   <label htmlFor={`service-${service.id}`} className="cursor-pointer">
                     <Upload className="h-3 w-3 mr-1" />
-                    {hasCustomImage ? 'Cambiar imagen' : 'Subir imagen'}
+                    {hasCustomImage ? '更换图片' : '上传图片'}
                   </label>
                 </Button>
               </div>
@@ -151,21 +151,21 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Seleccionar Servicios</h2>
+          <h2 className="text-2xl font-bold">选择服务</h2>
           <p className="text-muted-foreground">
-            Elige los servicios que necesitas y sube imágenes personalizadas si es necesario
+            选择需要的服务，必要时可上传自定义图片
           </p>
         </div>
         <div className="text-right space-y-2">
           <div className="text-sm text-muted-foreground">
-            {selectedCount} servicios seleccionados
+            {selectedCount} 个服务已选择
           </div>
           <Button
             variant="outline"
             onClick={handleSelectAll}
             className="text-sm"
           >
-            {selectAll ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            {selectAll ? '取消全选' : '全选'}
           </Button>
         </div>
       </div>

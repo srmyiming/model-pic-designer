@@ -25,9 +25,9 @@ const Index = () => {
   } = useImageProcessing();
 
   const steps = [
-    { id: 'upload', title: 'Subir Imágenes', icon: Smartphone },
-    { id: 'select', title: 'Seleccionar Servicios', icon: Wrench },
-    { id: 'process', title: 'Procesar y Descargar', icon: Download },
+    { id: 'upload', title: '上传图片', icon: Smartphone },
+    { id: 'select', title: '选择服务', icon: Wrench },
+    { id: 'process', title: '处理并下载', icon: Download },
   ];
 
   const canProceedToStep = (step: number) => {
@@ -154,11 +154,10 @@ const Index = () => {
           {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-4">
-              Sistema de Procesamiento de Imágenes de Reparación
+              设备维修图片处理系统
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Sube imágenes de dispositivos, selecciona servicios de reparación y genera 
-              materiales promocionales profesionales automáticamente
+              上传设备图片，选择维修服务，自动生成专业的宣传材料
             </p>
           </div>
 
@@ -179,7 +178,7 @@ const Index = () => {
               className="flex items-center gap-2"
             >
               <ChevronLeft className="h-4 w-4" />
-              Anterior
+              上一步
             </Button>
             
             <Button
@@ -187,7 +186,7 @@ const Index = () => {
               disabled={currentStep === steps.length - 1 || !canProceedToStep(currentStep + 1)}
               className="flex items-center gap-2"
             >
-              {currentStep === steps.length - 1 ? 'Finalizar' : 'Siguiente'}
+              {currentStep === steps.length - 1 ? '完成' : '下一步'}
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

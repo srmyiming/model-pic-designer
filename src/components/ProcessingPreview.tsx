@@ -31,7 +31,7 @@ export const ProcessingPreview = ({
 
   const handleDownload = () => {
     if (!sku.trim()) {
-      alert('Por favor ingresa un SKU para el archivo');
+      alert('请输入文件的SKU');
       return;
     }
     onDownload(sku.trim());
@@ -44,21 +44,21 @@ export const ProcessingPreview = ({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">
-            {selectedServices.find(s => s.serviceId === image.serviceId)?.serviceId || 'Servicio'}
+            {selectedServices.find(s => s.serviceId === image.serviceId)?.serviceId || '服务'}
           </CardTitle>
           <Badge variant={image.approved ? "default" : "secondary"}>
-            {image.approved ? 'Aprobado' : 'Pendiente'}
+            {image.approved ? '已批准' : '待处理'}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Original</p>
+            <p className="text-xs text-muted-foreground">原图</p>
             <div className="relative">
               <img
                 src={image.originalImage}
-                alt="Original"
+                alt="原图"
                 className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => setPreviewImage(image.originalImage)}
               />
@@ -73,11 +73,11 @@ export const ProcessingPreview = ({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Procesado</p>
+            <p className="text-xs text-muted-foreground">处理后</p>
             <div className="relative">
               <img
                 src={image.processedImage}
-                alt="Procesado"
+                alt="处理后"
                 className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => setPreviewImage(image.processedImage)}
               />
@@ -101,7 +101,7 @@ export const ProcessingPreview = ({
             onClick={() => onImageApproval(image.serviceId, true)}
           >
             <Check className="h-3 w-3 mr-1" />
-            Aprobar
+            批准
           </Button>
           <Button
             variant={!image.approved ? "destructive" : "outline"}
@@ -110,7 +110,7 @@ export const ProcessingPreview = ({
             onClick={() => onImageApproval(image.serviceId, false)}
           >
             <X className="h-3 w-3 mr-1" />
-            Rechazar
+            拒绝
           </Button>
         </div>
       </CardContent>
@@ -120,16 +120,16 @@ export const ProcessingPreview = ({
   return (
     <div className="space-y-6">
       <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold">Previsualización y Procesamiento</h2>
+        <h2 className="text-2xl font-bold">预览和处理</h2>
         <p className="text-muted-foreground">
-          Revisa las imágenes procesadas y aprueba las que estén correctas
+          检查处理后的图片并批准正确的图片
         </p>
         
         {isProcessing && (
           <div className="space-y-2">
             <Progress value={progress} className="w-full max-w-md mx-auto" />
             <p className="text-sm text-muted-foreground">
-              Procesando {processedCount} de {selectedServices.length} servicios...
+              正在处理 {processedCount} / {selectedServices.length} 个服务...
             </p>
           </div>
         )}
@@ -148,14 +148,14 @@ export const ProcessingPreview = ({
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
-                    <h3 className="font-semibold mb-2">Descargar Archivos</h3>
+                    <h3 className="font-semibold mb-2">下载文件</h3>
                     <p className="text-sm opacity-90 mb-4">
-                      {approvedCount} de {processedImages.length} imágenes aprobadas
+                      {approvedCount} / {processedImages.length} 张图片已批准
                     </p>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        placeholder="Ingresa el SKU..."
+                        placeholder="输入SKU..."
                         value={sku}
                         onChange={(e) => setSku(e.target.value)}
                         className="flex-1 px-3 py-2 rounded border text-foreground bg-background"
@@ -166,7 +166,7 @@ export const ProcessingPreview = ({
                         disabled={approvedCount === 0 || !sku.trim()}
                       >
                         <Download className="h-4 w-4 mr-2" />
-                        Descargar ZIP
+                        下载压缩包
                       </Button>
                     </div>
                   </div>
@@ -186,7 +186,7 @@ export const ProcessingPreview = ({
           <div className="max-w-4xl max-h-[90vh] p-4">
             <img
               src={previewImage}
-              alt="Preview"
+              alt="预览"
               className="max-w-full max-h-full object-contain rounded-lg"
             />
             <Button

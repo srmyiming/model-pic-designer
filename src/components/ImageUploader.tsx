@@ -61,8 +61,8 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
   const handleFileSelect = useCallback(async (file: File, type: 'front' | 'back') => {
     if (!file.type.startsWith('image/')) {
       toast({
-        title: "Error",
-        description: "Por favor selecciona un archivo de imagen válido.",
+        title: "错误",
+        description: "请选择有效的图片文件。",
         variant: "destructive"
       });
       return;
@@ -75,8 +75,8 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
       
       if (!isValidBackground) {
         toast({
-          title: "Fondo no válido",
-          description: "La imagen debe tener un fondo blanco limpio.",
+          title: "背景无效",
+          description: "图片必须有干净的白色背景。",
           variant: "destructive"
         });
         setValidating(false);
@@ -89,14 +89,14 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
       });
 
       toast({
-        title: "Imagen cargada",
-        description: `Imagen ${type === 'front' ? 'frontal' : 'trasera'} cargada correctamente.`,
+        title: "图片已上传",
+        description: `${type === 'front' ? '正面' : '背面'}图片上传成功。`,
         variant: "default"
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Error al validar la imagen.",
+        title: "错误",
+        description: "验证图片时出错。",
         variant: "destructive"
       });
     }
@@ -134,7 +134,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
             <div className="relative">
               <img
                 src={URL.createObjectURL(file)}
-                alt={`${type} view`}
+                alt={type === 'front' ? '正面图片' : '背面图片'}
                 className="w-full h-48 object-contain rounded-lg bg-muted"
               />
               <Button
@@ -149,7 +149,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
             <div className="flex items-center gap-2 text-success">
               <Check className="h-4 w-4" />
               <span className="text-sm font-medium">
-                Imagen {type === 'front' ? 'frontal' : 'trasera'} cargada
+                {type === 'front' ? '正面' : '背面'}图片已上传
               </span>
             </div>
           </div>
@@ -166,14 +166,14 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
             </div>
             <div>
               <h3 className="font-semibold mb-2">
-                Imagen {type === 'front' ? 'Frontal' : 'Trasera'}
+                {type === 'front' ? '正面' : '背面'}图片
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Arrastra la imagen aquí o haz clic para seleccionar
+                拖拽图片到此处或点击选择
               </p>
               <div className="flex items-center gap-2 text-xs text-warning mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <span>Fondo blanco requerido</span>
+                <span>需要白色背景</span>
               </div>
               <input
                 type="file"
@@ -192,7 +192,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
                 disabled={validating}
               >
                 <label htmlFor={`${type}-upload`} className="cursor-pointer">
-                  {validating ? 'Validando...' : 'Seleccionar Imagen'}
+                  {validating ? '验证中...' : '选择图片'}
                 </label>
               </Button>
             </div>
@@ -205,9 +205,9 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">Subir Imágenes del Dispositivo</h2>
+        <h2 className="text-2xl font-bold">上传设备图片</h2>
         <p className="text-muted-foreground">
-          Sube las imágenes frontal y trasera del dispositivo con fondo blanco limpio
+          上传设备的正面和背面图片，需要干净的白色背景
         </p>
       </div>
       
