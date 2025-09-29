@@ -33,7 +33,7 @@ const Index = () => {
   const canProceedToStep = (step: number) => {
     switch (step) {
       case 1:
-        return deviceImages.front !== null && deviceImages.back !== null;
+        return true; // Allow proceeding to service selection without images
       case 2:
         return Object.values(selections).some(s => s.isSelected);
       default:
