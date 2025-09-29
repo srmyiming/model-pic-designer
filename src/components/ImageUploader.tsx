@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, X, Check, AlertCircle } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Upload, X, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { DeviceImages } from '@/types/repair';
 import { toast } from '@/hooks/use-toast';
+import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
 
 interface ImageUploaderProps {
   deviceImages: DeviceImages;
@@ -13,6 +15,20 @@ interface ImageUploaderProps {
 export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderProps) => {
   const [dragOver, setDragOver] = useState<'front' | 'back' | null>(null);
   const [validating, setValidating] = useState(false);
+  const [processingSide, setProcessingSide] = useState<'front' | 'back' | null>(null);
+  const { removeImageBackground, isProcessing, progress } = useBackgroundRemoval();
+
+  // Cleanup object URLs when component unmounts or images change
+  useEffect(() => {
+    return () => {
+      if (deviceImages.front) {
+        URL.revokeObjectURL(URL.createObjectURL(deviceImages.front));
+      }
+      if (deviceImages.back) {
+        URL.revokeObjectURL(URL.createObjectURL(deviceImages.back));
+      }
+    };
+  }, [deviceImages]);
 
   const validateImage = useCallback(async (file: File): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -69,40 +85,52 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
     }
 
     setValidating(true);
-    
+    setProcessingSide(type);
+
     try {
-      const isValidBackground = await validateImage(file);
-      
-      if (!isValidBackground) {
+      // Remove background automatically
+      toast({
+        title: "正在处理",
+        description: "正在自动去除背景，请稍候...",
+      });
+
+      const processedBlob = await removeImageBackground(file);
+
+      if (!processedBlob) {
         toast({
-          title: "背景无效",
-          description: "图片必须有干净的白色背景。",
+          title: "处理失败",
+          description: "背景去除失败，请重试。",
           variant: "destructive"
         });
         setValidating(false);
+        setProcessingSide(null);
         return;
       }
 
+      // Convert Blob to File
+      const processedFile = new File([processedBlob], file.name, { type: 'image/png' });
+
       onImagesChange({
         ...deviceImages,
-        [type]: file
+        [type]: processedFile
       });
 
       toast({
         title: "图片已上传",
-        description: `${type === 'front' ? '正面' : '背面'}图片上传成功。`,
+        description: `${type === 'front' ? '正面' : '背面'}图片已自动去除背景。`,
         variant: "default"
       });
     } catch (error) {
       toast({
         title: "错误",
-        description: "验证图片时出错。",
+        description: "处理图片时出错。",
         variant: "destructive"
       });
     }
-    
+
     setValidating(false);
-  }, [deviceImages, onImagesChange, validateImage]);
+    setProcessingSide(null);
+  }, [deviceImages, onImagesChange, removeImageBackground]);
 
   const handleDrop = useCallback((e: React.DragEvent, type: 'front' | 'back') => {
     e.preventDefault();
@@ -124,36 +152,54 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
     });
   }, [deviceImages, onImagesChange]);
 
-  const ImageUploadCard = ({ type, file }: { type: 'front' | 'back'; file: File | null }) => (
-    <Card className={`relative transition-all duration-300 ${
-      dragOver === type ? 'ring-2 ring-primary shadow-glow' : ''
-    } ${file ? 'border-success' : 'border-dashed border-2'}`}>
-      <CardContent className="p-6">
-        {file ? (
-          <div className="space-y-4">
-            <div className="relative">
-              <img
-                src={URL.createObjectURL(file)}
-                alt={type === 'front' ? '正面图片' : '背面图片'}
-                className="w-full h-48 object-contain rounded-lg bg-muted"
-              />
-              <Button
-                variant="destructive"
-                size="sm"
-                className="absolute top-2 right-2 rounded-full w-8 h-8 p-0"
-                onClick={() => removeImage(type)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+  const ImageUploadCard = ({ type, file }: { type: 'front' | 'back'; file: File | null }) => {
+    const isProcessingThis = isProcessing && processingSide === type;
+
+    return (
+      <Card className={`relative transition-all duration-300 ${
+        dragOver === type ? 'ring-2 ring-primary shadow-glow' : ''
+      } ${file ? 'border-success' : 'border-dashed border-2'}`}>
+        <CardContent className="p-6">
+          {isProcessingThis ? (
+            <div className="space-y-4 py-8">
+              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+              </div>
+              <div className="text-center">
+                <h3 className="font-semibold mb-2">正在处理图片</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  自动去除背景中，请稍候...
+                </p>
+                <Progress value={progress} className="w-full" />
+                <p className="text-xs text-muted-foreground mt-2">{progress}%</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-success">
-              <Check className="h-4 w-4" />
-              <span className="text-sm font-medium">
-                {type === 'front' ? '正面' : '背面'}模型图已上传
-              </span>
+          ) : file ? (
+            <div className="space-y-4">
+              <div className="relative">
+                <img
+                  src={URL.createObjectURL(file)}
+                  alt={type === 'front' ? '正面图片' : '背面图片'}
+                  className="w-full h-48 object-contain rounded-lg"
+                  style={{ backgroundColor: '#f0f0f0' }}
+                />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-2 right-2 rounded-full w-8 h-8 p-0"
+                  onClick={() => removeImage(type)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 text-success">
+                <Check className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {type === 'front' ? '正面' : '背面'}模型图已上传（已去背景）
+                </span>
+              </div>
             </div>
-          </div>
-        ) : (
+          ) : (
           <div
             className="text-center space-y-4 py-8"
             onDrop={(e) => handleDrop(e, type)}
@@ -171,9 +217,9 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
               <p className="text-sm text-muted-foreground mb-4">
                 拖拽图片到此处或点击上传
               </p>
-              <div className="flex items-center gap-2 text-xs text-warning mb-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <span>必须是白底图</span>
+                <span>上传后将自动去除背景</span>
               </div>
               <input
                 type="file"
@@ -189,10 +235,10 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
                 variant="outline"
                 className="w-full"
                 asChild
-                disabled={validating}
+                disabled={validating || isProcessing}
               >
                 <label htmlFor={`${type}-upload`} className="cursor-pointer">
-                  {validating ? '验证中...' : '选择图片'}
+                  {isProcessing ? '处理中...' : '选择图片'}
                 </label>
               </Button>
             </div>
@@ -200,7 +246,8 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
         )}
       </CardContent>
     </Card>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">

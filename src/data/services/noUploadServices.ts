@@ -13,7 +13,25 @@ export const noUploadServices: RepairService[] = [
     category: 'screen',
     thumbnail: '/service-previews/Cambiar Pantalla Xiaomi 15....jpg',
     needsPartImage: false,
-    useModelSide: 'front'
+    useModelSide: 'front',
+    overlayArea: {
+      x: -0.02,     // Extend slightly to ensure bezel coverage
+      y: -0.02,
+      width: 1.04,
+      height: 1.04
+    },
+    overlayImage: '/cracked-screen.png',
+    crackPoints: [
+      { x: 0.35, y: 0.25, size: 0.4 },  // Top crack
+      { x: 0.50, y: 0.50, size: 0.4 },  // Middle crack
+      { x: 0.40, y: 0.75, size: 0.4 }   // Bottom crack
+    ],
+    fillColor: '#000000',
+    layout: {
+      type: 'side-by-side',
+      dividerColor: '#0f172a',
+      dividerWidthRatio: 0.035,
+    }
   },
   {
     id: 'back-cover',

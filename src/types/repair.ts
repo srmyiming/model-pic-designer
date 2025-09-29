@@ -1,3 +1,24 @@
+export interface OverlayArea {
+  x: number;      // Percentage relative to image width (0-1)
+  y: number;      // Percentage relative to image height (0-1)
+  width: number;  // Percentage relative to image width (0-1)
+  height: number; // Percentage relative to image height (0-1)
+}
+
+export interface CrackPoint {
+  x: number;      // Percentage X position (0-1)
+  y: number;      // Percentage Y position (0-1)
+  size: number;   // Size relative to screen width (0-1)
+}
+
+export interface SideBySideLayoutConfig {
+  type: 'side-by-side';
+  dividerColor?: string;        // Vertical separator color
+  dividerWidthRatio?: number;   // Separator width relative to final width (0-1)
+}
+
+export type ServiceLayout = SideBySideLayoutConfig;
+
 export interface RepairService {
   id: string;
   title: string;
@@ -7,6 +28,11 @@ export interface RepairService {
   thumbnail: string;
   needsPartImage: boolean;
   useModelSide?: 'front' | 'back';
+  overlayArea?: OverlayArea;     // Screen area to fill with black
+  overlayImage?: string;         // PNG effect image path (single crack)
+  crackPoints?: CrackPoint[];    // Multiple crack positions
+  fillColor?: string;            // Background fill color for screen area
+  layout?: ServiceLayout;        // Final composition layout configuration
 }
 
 export interface DeviceImages {
