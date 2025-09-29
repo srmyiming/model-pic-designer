@@ -149,7 +149,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
             <div className="flex items-center gap-2 text-success">
               <Check className="h-4 w-4" />
               <span className="text-sm font-medium">
-                {type === 'front' ? '正面' : '背面'}图片已上传
+                {type === 'front' ? '正面' : '背面'}模型图已上传
               </span>
             </div>
           </div>
@@ -166,14 +166,14 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
             </div>
             <div>
               <h3 className="font-semibold mb-2">
-                {type === 'front' ? '正面' : '背面'}图片
+                手机{type === 'front' ? '正面' : '背面'}图
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                拖拽图片到此处或点击选择
+                拖拽图片到此处或点击上传
               </p>
               <div className="flex items-center gap-2 text-xs text-warning mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <span>需要白色背景</span>
+                <span>必须是白底图</span>
               </div>
               <input
                 type="file"
@@ -205,12 +205,38 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">上传设备图片</h2>
+        <h2 className="text-2xl font-bold">上传手机模型图</h2>
         <p className="text-muted-foreground">
-          上传设备的正面和背面图片，需要干净的白色背景
+          上传手机的正面和背面白底图，用于后续生成产品展示图
         </p>
       </div>
-      
+
+      {/* 示例图展示 */}
+      <div className="bg-muted/30 rounded-lg p-3 border border-dashed border-muted-foreground/30">
+        <div className="flex items-center gap-2 mb-2">
+          <AlertCircle className="h-3.5 w-3.5 text-primary" />
+          <h3 className="text-xs font-semibold">参考示例</h3>
+        </div>
+        <div className="grid md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+          <div className="space-y-1">
+            <p className="text-[10px] text-muted-foreground">正面示例（白底、居中）</p>
+            <img
+              src="/example-front.png"
+              alt="正面示例"
+              className="w-full h-32 object-contain rounded border bg-white"
+            />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] text-muted-foreground">背面示例（白底、居中）</p>
+            <img
+              src="/example-back.png"
+              alt="背面示例"
+              className="w-full h-32 object-contain rounded border bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-6">
         <ImageUploadCard type="front" file={deviceImages.front} />
         <ImageUploadCard type="back" file={deviceImages.back} />

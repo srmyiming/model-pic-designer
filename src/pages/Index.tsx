@@ -6,7 +6,16 @@ import { ServiceSelector } from '@/components/ServiceSelector';
 import { ProcessingPreview } from '@/components/ProcessingPreview';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
 import { DeviceImages, ServiceSelection } from '@/types/repair';
-import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download, X } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -15,6 +24,8 @@ const Index = () => {
     back: null,
   });
   const [selections, setSelections] = useState<Record<string, ServiceSelection>>({});
+  const [showSkuDialog, setShowSkuDialog] = useState(false);
+  const [sku, setSku] = useState('');
 
   const {
     processedImages,
@@ -25,9 +36,9 @@ const Index = () => {
   } = useImageProcessing();
 
   const steps = [
-    { id: 'upload', title: '上传图片', icon: Smartphone },
-    { id: 'select', title: '选择服务', icon: Wrench },
-    { id: 'process', title: '处理并下载', icon: Download },
+    { id: 'upload', title: '上传模型图', icon: Smartphone },
+    { id: 'select', title: '选择产品', icon: Wrench },
+    { id: 'process', title: '生成下载', icon: Download },
   ];
 
   const canProceedToStep = (step: number) => {
@@ -44,11 +55,23 @@ const Index = () => {
   const handleNext = () => {
     if (currentStep < steps.length - 1 && canProceedToStep(currentStep + 1)) {
       if (currentStep === 1) {
-        // Start processing when moving to step 2
-        processImages(deviceImages, selections);
+        // Show SKU input dialog before processing
+        setShowSkuDialog(true);
+      } else {
+        setCurrentStep(currentStep + 1);
       }
-      setCurrentStep(currentStep + 1);
     }
+  };
+
+  const handleSkuSubmit = () => {
+    if (!sku.trim()) {
+      alert('请输入SKU名称');
+      return;
+    }
+    setShowSkuDialog(false);
+    setCurrentStep(2);
+    // Start processing when SKU is confirmed
+    processImages(deviceImages, selections);
   };
 
   const handlePrev = () => {
@@ -140,6 +163,7 @@ const Index = () => {
             onImageApproval={updateImageApproval}
             onDownload={downloadApprovedImages}
             isProcessing={isProcessing}
+            sku={sku}
           />
         );
       default:
@@ -153,11 +177,18 @@ const Index = () => {
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
+            <div className="flex justify-center mb-6">
+              <img
+                src="/logo.jpg"
+                alt="Reparacionmovil Logo"
+                className="h-16 md:h-20 object-contain"
+              />
+            </div>
             <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-4">
-              设备维修图片处理系统
+              电商产品图片生成器
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              上传设备图片，选择维修服务，自动生成专业的宣传材料
+              上传手机模型图，选择产品类目，自动生成专业的电商展示图
             </p>
           </div>
 
@@ -192,6 +223,39 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      {/* SKU Input Dialog */}
+      <Dialog open={showSkuDialog} onOpenChange={setShowSkuDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>输入产品SKU</DialogTitle>
+            <DialogDescription>
+              请输入SKU名称，用于生成文件名
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              type="text"
+              placeholder="例如：Xiaomi-15-Ultra"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSkuSubmit();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSkuDialog(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSkuSubmit}>
+              确认并生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

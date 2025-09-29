@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, Check } from 'lucide-react';
-import { REPAIR_SERVICES, RepairService, ServiceSelection } from '@/types/repair';
+import { RepairService, ServiceSelection } from '@/types/repair';
+import { ALL_SERVICES } from '@/data/services';
 
 interface ServiceSelectorProps {
   selections: Record<string, ServiceSelection>;
@@ -49,9 +50,9 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
   const handleSelectAll = () => {
     const newSelectAll = !selectAll;
     setSelectAll(newSelectAll);
-    
+
     const newSelections: Record<string, ServiceSelection> = {};
-    REPAIR_SERVICES.forEach(service => {
+    ALL_SERVICES.forEach(service => {
       newSelections[service.id] = {
         serviceId: service.id,
         isSelected: newSelectAll,
@@ -76,70 +77,83 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
 
   const selectedCount = Object.values(selections).filter(s => s.isSelected).length;
 
-  const ServiceCard = ({ service }: { service: RepairService }) => {
+  const ServiceCard = ({ service, index }: { service: RepairService; index: number }) => {
     const isSelected = selections[service.id]?.isSelected || false;
     const hasCustomImage = selections[service.id]?.customImage;
 
     return (
-      <Card className={`transition-all duration-300 cursor-pointer hover:shadow-elegant ${
-        isSelected ? 'ring-2 ring-primary border-primary shadow-glow' : 'hover:border-primary/50'
-      }`}>
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => handleServiceToggle(service)}
-              className="mt-1"
-            />
-            <div className="flex-1 space-y-3">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className={categoryColors[service.category]}>
-                    {categoryLabels[service.category]}
-                  </Badge>
-                </div>
-                <h3 className="font-semibold text-sm leading-tight">
-                  {service.title}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {service.description}
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                {hasCustomImage ? (
-                  <div className="flex items-center gap-2 text-success text-xs">
-                    <Check className="h-3 w-3" />
-                    <span>自定义图片已上传</span>
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">
-                    无自定义图片
-                  </div>
-                )}
-                
-                <input
-                  type="file"
-                  accept="image/*"
-                  id={`service-${service.id}`}
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImageUpload(service.id, file);
-                  }}
+      <Card
+        className={`transition-all duration-200 cursor-pointer hover:shadow-md ${
+          isSelected ? 'ring-2 ring-primary border-primary' : 'hover:border-primary/50'
+        }`}
+        onClick={() => handleServiceToggle(service)}
+      >
+        <CardContent className="p-2">
+          <div className="space-y-1.5">
+            {/* 预览图 - 正方形 */}
+            <div className="relative aspect-square rounded overflow-hidden bg-muted">
+              <img
+                src={service.thumbnail}
+                alt={service.titleCN}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute top-1 left-1">
+                <Checkbox
+                  checked={isSelected}
+                  className="bg-white shadow-sm h-4 w-4 pointer-events-none"
                 />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs h-8"
-                  asChild
-                >
-                  <label htmlFor={`service-${service.id}`} className="cursor-pointer">
-                    <Upload className="h-3 w-3 mr-1" />
-                    {hasCustomImage ? '更换图片' : '上传图片'}
-                  </label>
-                </Button>
               </div>
+              <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                {index}
+              </div>
+            </div>
+
+            {/* 服务信息 */}
+            <div className="space-y-0.5">
+              <h3 className="font-semibold text-xs leading-tight line-clamp-2">
+                {service.titleCN}
+              </h3>
+            </div>
+
+            {/* 上传配件图 */}
+            <div className="space-y-1">
+              {service.needsPartImage ? (
+                <>
+                  {hasCustomImage && (
+                    <div className="flex items-center gap-1 text-success text-[10px]">
+                      <Check className="h-2.5 w-2.5" />
+                      <span>已上传</span>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id={`service-${service.id}`}
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageUpload(service.id, file);
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-[10px] h-6 px-2"
+                    asChild
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  >
+                    <label htmlFor={`service-${service.id}`} className="cursor-pointer">
+                      <Upload className="h-2.5 w-2.5 mr-0.5" />
+                      {hasCustomImage ? '更换' : '上传产品图'}
+                    </label>
+                  </Button>
+                </>
+              ) : (
+                <div className="text-[10px] text-muted-foreground text-center py-1">
+                  使用{service.useModelSide === 'front' ? '正面' : '背面'}模型图
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -151,28 +165,28 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">选择服务</h2>
+          <h2 className="text-2xl font-bold">选择产品类目</h2>
           <p className="text-muted-foreground">
-            选择需要的服务，必要时可上传自定义图片
+            选择需要生成的产品图片，并上传对应的产品白底图
           </p>
         </div>
         <div className="text-right space-y-2">
           <div className="text-sm text-muted-foreground">
-            {selectedCount} 个服务已选择
+            已选择 {selectedCount} 个产品
           </div>
           <Button
             variant="outline"
             onClick={handleSelectAll}
             className="text-sm"
           >
-            {selectAll ? '取消全选' : '全选'}
+            {selectAll ? '取消全选' : '全选产品'}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {REPAIR_SERVICES.map((service) => (
-          <ServiceCard key={service.id} service={service} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        {ALL_SERVICES.map((service, index) => (
+          <ServiceCard key={service.id} service={service} index={index + 1} />
         ))}
       </div>
     </div>

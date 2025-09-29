@@ -1,0 +1,26 @@
+import { RepairService } from '@/types/repair';
+
+/**
+ * 硬件类服务
+ * 需要上传对应的硬件配件白底图
+ */
+export const hardwareServices: RepairService[] = [
+  {
+    id: 'charging-port',
+    title: 'Cambiar Conector De Carga Xiaomi 15 Ultra',
+    titleCN: '更换充电接口',
+    description: '修复或更换 USB-C 充电接口',
+    category: 'hardware',
+    thumbnail: '/service-previews/Cambiar Conector de Carga....jpg',
+    needsPartImage: true
+  },
+  {
+    id: 'battery-replacement',
+    title: 'Cambiar Batería Xiaomi 15 Ultra',
+    titleCN: '更换电池',
+    description: '更换内置电池（解决电量下降和老化问题）',
+    category: 'hardware',
+    thumbnail: '/service-previews/Cambiar Batería Xiaomi 15....jpg',
+    needsPartImage: true
+  }
+];
