@@ -31,12 +31,19 @@ export interface CrackPoint {
  * - badges：可选，贴纸/徽标列表。位置是相对于整个 800×800 画布的比例；
  *   - widthRatio：徽标宽度占画布宽度的比例；
  *   - yRatio：徽标中心的纵向位置（0 顶部，1 底部）。
+ * - centerBadges：可选，底部居中的徽标列表（水平并排）
  */
 export interface SideBySideLayoutConfig {
   type: 'side-by-side';
   dividerColor?: string;        // 中缝分隔线颜色
   dividerWidthRatio?: number;   // 中缝分隔线宽度比例（0~1）
+  leftHeightRatio?: number;     // 左侧图片目标高度比例（0~1，默认0.80）
   badges?: {
+    src: string;          // 徽标图片（public 路径）
+    widthRatio: number;   // 徽标宽度相对画布宽度比例（0~1）
+    yRatio: number;       // 徽标中心的纵向位置（0~1）
+  }[];
+  centerBadges?: {
     src: string;          // 徽标图片（public 路径）
     widthRatio: number;   // 徽标宽度相对画布宽度比例（0~1）
     yRatio: number;       // 徽标中心的纵向位置（0~1）
@@ -50,6 +57,9 @@ export interface SideBySideLayoutConfig {
 export interface SingleCenteredLayoutConfig {
   type: 'single-centered';
   targetHeightRatio?: number; // 处理后手机在 800×800 画布中的目标高度占比（默认 0.8）
+  // 可选：将“主内容（或组合体）”在水平方向上微调，正数向右，负数向左。
+  // 单位为画布宽度比例（-0.5 ~ 0.5 建议范围），默认 0。
+  centerOffsetRatioX?: number;
   edgeBadges?: {
     src: string;               // 徽标图片（public 路径）
     widthRatio: number;        // 徽标宽度相对画布宽度比例（0~1）
@@ -80,6 +90,7 @@ export interface RepairService {
   category: 'screen' | 'hardware' | 'protection' | 'camera' | 'audio' | 'buttons' | 'system';
   thumbnail: string;             // 预览缩略图（public 路径）
   needsPartImage: boolean;       // 是否需要上传配件图
+  defaultPartImage?: string;     // 可选：如果用户未上传配件图时使用的默认图片路径
   useModelSide?: 'front' | 'back';
   overlayArea?: OverlayArea;     // 效果叠加区域（相对设备轮廓，0~1）
   overlayImage?: string;         // 效果贴图路径（如裂纹 PNG）

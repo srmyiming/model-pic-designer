@@ -12,7 +12,18 @@ export const hardwareServices: RepairService[] = [
     description: '修复或更换 USB-C 充电接口',
     category: 'hardware',
     thumbnail: '/service-previews/Cambiar Conector de Carga....jpg',
-    needsPartImage: true
+    needsPartImage: true,
+    defaultPartImage: '/assets/parts/charging-port.png',
+    useModelSide: 'back',
+    layout: {
+      type: 'side-by-side',
+      leftHeightRatio: 0.35,  // 充电口缩小到35%高度
+      badges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.62 },
+      ],
+    },
+    implemented: true
   },
   {
     id: 'battery-replacement',

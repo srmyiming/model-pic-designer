@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,8 +32,6 @@ const categoryLabels = {
 };
 
 export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelectorProps) => {
-  const [selectAll, setSelectAll] = useState(false);
-
   const handleServiceToggle = (service: RepairService) => {
     const newSelections = {
       ...selections,
@@ -47,17 +44,20 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
     onSelectionChange(newSelections);
   };
 
-  const handleSelectAll = () => {
-    const newSelectAll = !selectAll;
-    setSelectAll(newSelectAll);
+  // 计算是否所有已实现的产品都被选中了
+  const implementedServices = ALL_SERVICES.filter(s => s.implemented === true);
+  const allImplementedSelected = implementedServices.every(
+    service => selections[service.id]?.isSelected
+  );
 
+  const handleSelectAll = () => {
     const newSelections: Record<string, ServiceSelection> = {};
     ALL_SERVICES.forEach(service => {
-      // Only select/deselect implemented services
       const isImplemented = service.implemented === true;
       newSelections[service.id] = {
         serviceId: service.id,
-        isSelected: isImplemented ? newSelectAll : false,
+        // 如果当前是全选状态，就取消全选；否则全选
+        isSelected: isImplemented ? !allImplementedSelected : false,
         customImage: selections[service.id]?.customImage,
       };
     });
@@ -78,6 +78,12 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
   };
 
   const selectedCount = Object.values(selections).filter(s => s.isSelected).length;
+
+  // Check if any selected service needs part image but hasn't uploaded and has no default
+  const missingImages = ALL_SERVICES.filter(service => {
+    const sel = selections[service.id];
+    return sel?.isSelected && service.needsPartImage && !sel.customImage && !service.defaultPartImage;
+  });
 
   const ServiceCard = ({ service, index }: { service: RepairService; index: number }) => {
     const isSelected = selections[service.id]?.isSelected || false;
@@ -196,10 +202,29 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
             onClick={handleSelectAll}
             className="text-sm"
           >
-            {selectAll ? '取消全选' : '全选产品'}
+            {allImplementedSelected ? '取消全选' : '全选产品'}
           </Button>
         </div>
       </div>
+
+      {missingImages.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="text-yellow-600 mt-0.5">⚠️</div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900 mb-1">需要上传产品图</h3>
+              <p className="text-sm text-yellow-800 mb-2">
+                以下已选择的产品需要上传白底图才能生成：
+              </p>
+              <ul className="text-sm text-yellow-800 list-disc list-inside space-y-1">
+                {missingImages.map(service => (
+                  <li key={service.id}>{service.titleCN}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         {ALL_SERVICES.map((service, index) => (

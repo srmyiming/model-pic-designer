@@ -8,6 +8,7 @@ import { useImageProcessing } from '@/hooks/useImageProcessing';
 import { DeviceImages, ServiceSelection, PhoneBrand } from '@/types/repair';
 import { PhoneBrandSelector } from '@/components/PhoneBrandSelector';
 import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download, X } from 'lucide-react';
+import { ALL_SERVICES } from '@/data/services';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ const Index = () => {
   const [phoneBrand, setPhoneBrand] = useState<PhoneBrand | null>(null);
   const [showSkuDialog, setShowSkuDialog] = useState(false);
   const [sku, setSku] = useState('');
+  const [showSkuOnImage, setShowSkuOnImage] = useState(true);
 
   const {
     processedImages,
@@ -49,7 +51,19 @@ const Index = () => {
         // Require phone brand selection before entering step 2 (service selection)
         return phoneBrand !== null;
       case 2:
-        return Object.values(selections).some(s => s.isSelected);
+        // Check if any service is selected
+        const hasSelection = Object.values(selections).some(s => s.isSelected);
+        if (!hasSelection) return false;
+
+        // Check if all selected services that need part images have them uploaded or have default
+        const selectedServices = Object.values(selections).filter(s => s.isSelected);
+        for (const sel of selectedServices) {
+          const serviceConfig = ALL_SERVICES.find(s => s.id === sel.serviceId);
+          if (serviceConfig?.needsPartImage && !sel.customImage && !serviceConfig.defaultPartImage) {
+            return false; // Has selected service that needs image but hasn't uploaded and has no default
+          }
+        }
+        return true;
       default:
         return true;
     }
@@ -57,9 +71,13 @@ const Index = () => {
 
   const handleNext = () => {
     if (currentStep < steps.length - 1 && canProceedToStep(currentStep + 1)) {
-      if (currentStep === 1) {
-        // Show SKU input dialog before processing
+      if (currentStep === 0) {
+        // Show SKU input dialog after step 1 (upload)
         setShowSkuDialog(true);
+      } else if (currentStep === 1) {
+        // From step 2 (service selection) to step 3 (preview), start processing
+        setCurrentStep(2);
+        processImages(deviceImages, selections, sku, showSkuOnImage);
       } else {
         setCurrentStep(currentStep + 1);
       }
@@ -72,9 +90,8 @@ const Index = () => {
       return;
     }
     setShowSkuDialog(false);
-    setCurrentStep(2);
-    // Start processing when SKU is confirmed
-    processImages(deviceImages, selections);
+    // After SKU input in step 1, go to step 2 (service selection)
+    setCurrentStep(1);
   };
 
   const handlePrev = () => {
@@ -245,28 +262,42 @@ const Index = () => {
           <DialogHeader>
             <DialogTitle>输入产品SKU</DialogTitle>
             <DialogDescription>
-              请输入SKU名称，用于生成文件名
+              请输入SKU名称，用于生成文件名和图片标识
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Input
-              type="text"
-              placeholder="例如：Xiaomi-15-Ultra"
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSkuSubmit();
-                }
-              }}
-            />
+          <div className="space-y-4 py-4">
+            <div>
+              <Input
+                type="text"
+                placeholder="例如：Xiaomi-15-Ultra"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSkuSubmit();
+                  }
+                }}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="showSkuOnImage"
+                checked={showSkuOnImage}
+                onChange={(e) => setShowSkuOnImage(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <label htmlFor="showSkuOnImage" className="text-sm cursor-pointer">
+                在图片上显示SKU名称
+              </label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSkuDialog(false)}>
               取消
             </Button>
             <Button onClick={handleSkuSubmit}>
-              确认并生成
+              确认并继续
             </Button>
           </DialogFooter>
         </DialogContent>

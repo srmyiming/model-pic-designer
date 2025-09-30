@@ -78,7 +78,20 @@ export const noUploadServices: RepairService[] = [
     category: 'protection',
     thumbnail: '/service-previews/Protector de Pantalla....jpg',
     needsPartImage: false,
-    useModelSide: 'front'
+    useModelSide: 'front',
+    centerOverlayImage: '/assets/parts/screen-protector-glass.png',
+    centerOverlayRatio: 1.0, // Special: will use custom glass protector layout
+    layout: {
+      type: 'single-centered',
+      targetHeightRatio: 0.80,
+      // 让“钢化膜+手机”组合整体向右轻微偏移，避免视觉偏左
+      centerOffsetRatioX: 0.03,
+      edgeBadges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.86, side: 'left' },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.86, side: 'right' },
+      ],
+    },
+    implemented: true
   },
   {
     id: 'screen-protector-hydrogel',

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -23,20 +23,29 @@ export const ProcessingPreview = ({
   sku
 }: ProcessingPreviewProps) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const createdUrlsRef = useRef<Set<string>>(new Set());
 
   const selectedServices = Object.values(selections).filter(s => s.isSelected);
   const processedCount = processedImages.length;
   const progress = selectedServices.length > 0 ? (processedCount / selectedServices.length) * 100 : 0;
 
-  // Cleanup object URLs to prevent memory leaks
+  // Track all created URLs
+  useEffect(() => {
+    processedImages.forEach(img => {
+      createdUrlsRef.current.add(img.originalImage);
+      createdUrlsRef.current.add(img.processedImage);
+    });
+  }, [processedImages]);
+
+  // Cleanup all URLs only on unmount
   useEffect(() => {
     return () => {
-      processedImages.forEach(img => {
-        URL.revokeObjectURL(img.originalImage);
-        URL.revokeObjectURL(img.processedImage);
+      createdUrlsRef.current.forEach(url => {
+        URL.revokeObjectURL(url);
       });
+      createdUrlsRef.current.clear();
     };
-  }, [processedImages]);
+  }, []);
 
   const handleDownload = () => {
     onDownload(sku);

@@ -96,11 +96,21 @@ const featherAlpha = (
   ctx.putImageData(img, x, y);
 };
 
-const detectContentBounds = (img: HTMLImageElement): ContentBounds | null => {
+interface DetectContentBoundsOptions {
+  alphaThreshold?: number;
+  padding?: number;
+}
+
+const detectContentBounds = (
+  img: HTMLImageElement,
+  options: DetectContentBoundsOptions = {},
+): ContentBounds | null => {
   const width = img.naturalWidth || img.width;
   const height = img.naturalHeight || img.height;
 
   if (width === 0 || height === 0) return null;
+
+  const { alphaThreshold = 10, padding = 0 } = options;
 
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = width;
@@ -123,7 +133,7 @@ const detectContentBounds = (img: HTMLImageElement): ContentBounds | null => {
       const idx = (y * width + x) * 4;
       const alpha = data[idx + 3];
 
-      if (alpha > 10) {
+      if (alpha > alphaThreshold) {
         if (x < minX) minX = x;
         if (y < minY) minY = y;
         if (x > maxX) maxX = x;
@@ -136,11 +146,16 @@ const detectContentBounds = (img: HTMLImageElement): ContentBounds | null => {
     return null;
   }
 
+  const paddedMinX = Math.max(0, minX - padding);
+  const paddedMinY = Math.max(0, minY - padding);
+  const paddedMaxX = Math.min(width - 1, maxX + padding);
+  const paddedMaxY = Math.min(height - 1, maxY + padding);
+
   return {
-    x: minX,
-    y: minY,
-    width: maxX - minX + 1,
-    height: maxY - minY + 1,
+    x: paddedMinX,
+    y: paddedMinY,
+    width: paddedMaxX - paddedMinX + 1,
+    height: paddedMaxY - paddedMinY + 1,
   };
 };
 
@@ -230,22 +245,24 @@ const renderBaseCanvas = (
         featherAlpha(ctx, ix, iy, iw, ih, 1, 1.06);
       } catch {}
 
+      // Always compute device content bounds and publish them, even if there's no overlay.
+      const computedBounds = detectContentBounds(img) ?? {
+        x: 0,
+        y: 0,
+        width: sourceWidth,
+        height: sourceHeight,
+      };
+
+      const normalizedComputed = normalizeBounds(computedBounds, sourceWidth, sourceHeight);
+      const activeNormalized = onBoundsReady
+        ? onBoundsReady(normalizedComputed)
+        : normalizedBounds ?? normalizedComputed;
+
+      const bounds = activeNormalized
+        ? denormalizeBounds(activeNormalized, sourceWidth, sourceHeight)
+        : computedBounds;
+
       if (service.overlayArea) {
-        const computedBounds = detectContentBounds(img) ?? {
-          x: 0,
-          y: 0,
-          width: sourceWidth,
-          height: sourceHeight,
-        };
-
-        const normalizedComputed = normalizeBounds(computedBounds, sourceWidth, sourceHeight);
-        const activeNormalized = onBoundsReady
-          ? onBoundsReady(normalizedComputed)
-          : normalizedBounds ?? normalizedComputed;
-
-        const bounds = activeNormalized
-          ? denormalizeBounds(activeNormalized, sourceWidth, sourceHeight)
-          : computedBounds;
 
         const overlay = service.overlayArea;
         const screenX = offsetX + (bounds.x + bounds.width * overlay.x) * scale;
@@ -304,7 +321,8 @@ const renderBaseCanvas = (
         }
 
         // Center overlay image (e.g., no-power warning) without circular clip
-        if (service.centerOverlayImage) {
+        // Skip for glass protector as it's handled in composeFinalLayout
+        if (service.centerOverlayImage && service.id !== 'screen-protector-glass') {
           const icon = new Image();
           icon.onload = () => {
             const ratio = Math.max(0.05, Math.min(1, service.centerOverlayRatio ?? 0.5));
@@ -354,11 +372,37 @@ const loadImageFromFile = (file: File): Promise<HTMLImageElement> => {
   });
 };
 
+// Helper function to draw SKU text at the top
+const drawSkuText = (ctx: CanvasRenderingContext2D, sku: string) => {
+  const topAreaHeight = OUTPUT_SIZE * 0.05; // Top 5% area
+  const margin = OUTPUT_SIZE * 0.05; // 5% margin on left and right
+  const maxTextWidth = OUTPUT_SIZE - margin * 2;
+
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Auto-fit font size: start large, shrink until text fits
+  let fontSize = 32;
+  const minFontSize = 12;
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+
+  while (fontSize > minFontSize && ctx.measureText(sku).width > maxTextWidth) {
+    fontSize -= 2;
+    ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+  }
+
+  const textY = topAreaHeight / 2;
+  ctx.fillText(sku, OUTPUT_SIZE / 2, textY);
+};
+
 const composeFinalLayout = async (
   service: RepairService,
   baseCanvas: HTMLCanvasElement,
   originalFile: File,
-  normalizedBounds: NormalizedBounds | null
+  normalizedBounds: NormalizedBounds | null,
+  sku?: string,
+  showSkuOnImage?: boolean
 ): Promise<string> => {
   if (!service.layout) {
     return canvasToObjectUrl(baseCanvas);
@@ -379,6 +423,7 @@ const composeFinalLayout = async (
   // Single-centered layout: draw only processed phone centered, then edge badges
   if (service.layout.type === 'single-centered') {
     const targetH = Math.floor(OUTPUT_SIZE * ((service.layout as any).targetHeightRatio ?? 0.8));
+    const centerOffsetX = OUTPUT_SIZE * (((service.layout as any).centerOffsetRatioX ?? 0));
 
     const getBoundsSingle = (drawable: HTMLCanvasElement | HTMLImageElement): ContentBounds => {
       const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
@@ -389,40 +434,192 @@ const composeFinalLayout = async (
       return { x: 0, y: 0, width: sw, height: sh };
     };
 
-    const drawCentered = (drawable: HTMLCanvasElement | HTMLImageElement) => {
+    type DrawablePlacement = {
+      sx: number;
+      sy: number;
+      sWidth: number;
+      sHeight: number;
+      drawX: number;
+      drawY: number;
+      drawWidth: number;
+      drawHeight: number;
+      intrinsicWidth: number;
+      isCropped: boolean;
+    };
+
+    const measureDrawable = (
+      drawable: HTMLCanvasElement | HTMLImageElement,
+    ): DrawablePlacement | null => {
       const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
       const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
-      if (sw === 0 || sh === 0) return;
-      const b = getBoundsSingle(drawable);
-      const scaleH = targetH / b.height;
-      const scaledW = b.width * scaleH;
+      if (sw === 0 || sh === 0) return null;
+
+      const bounds = getBoundsSingle(drawable);
+      const scaleH = targetH / bounds.height;
+      const scaledW = bounds.width * scaleH;
       const scaledH = targetH;
+      const drawY = (OUTPUT_SIZE - scaledH) / 2;
+
+      if (scaledW <= OUTPUT_SIZE) {
+        return {
+          sx: bounds.x,
+          sy: bounds.y,
+          sWidth: bounds.width,
+          sHeight: bounds.height,
+          drawX: (OUTPUT_SIZE - scaledW) / 2,
+          drawY,
+          drawWidth: scaledW,
+          drawHeight: scaledH,
+          intrinsicWidth: scaledW,
+          isCropped: false,
+        };
+      }
+
+      const ratio = OUTPUT_SIZE / scaledW;
+      const cropW = bounds.width * ratio;
+      return {
+        sx: bounds.x + (bounds.width - cropW) / 2,
+        sy: bounds.y,
+        sWidth: cropW,
+        sHeight: bounds.height,
+        drawX: 0,
+        drawY,
+        drawWidth: OUTPUT_SIZE,
+        drawHeight: scaledH,
+        intrinsicWidth: scaledW,
+        isCropped: true,
+      };
+    };
+
+    const drawMeasured = (
+      drawable: HTMLCanvasElement | HTMLImageElement,
+      placement: DrawablePlacement | null,
+    ) => {
+      if (!placement) return;
 
       (ctx as any).imageSmoothingEnabled = true;
       try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
       const prev = (ctx as any).filter ?? 'none';
       (ctx as any).filter = 'blur(0.15px)';
 
-      if (scaledW <= OUTPUT_SIZE) {
-        const dx = (OUTPUT_SIZE - scaledW) / 2;
-        const dy = (OUTPUT_SIZE - scaledH) / 2;
-        ctx.drawImage(drawable, b.x, b.y, b.width, b.height, dx, dy, scaledW, scaledH);
-      } else {
-        const ratio = OUTPUT_SIZE / scaledW;
-        const cropW = b.width * ratio;
-        const sx = b.x + (b.width - cropW) / 2;
-        const sy = b.y;
-        const dx = 0;
-        const dy = (OUTPUT_SIZE - scaledH) / 2;
-        ctx.drawImage(drawable, sx, sy, cropW, b.height, dx, dy, OUTPUT_SIZE, scaledH);
-      }
+      ctx.drawImage(
+        drawable,
+        placement.sx,
+        placement.sy,
+        placement.sWidth,
+        placement.sHeight,
+        placement.drawX,
+        placement.drawY,
+        placement.drawWidth,
+        placement.drawHeight,
+      );
 
       (ctx as any).filter = prev || 'none';
     };
 
-    drawCentered(baseCanvas);
+    const phonePlacement = measureDrawable(baseCanvas);
+    if (!phonePlacement) {
+      return canvasToObjectUrl(finalCanvas);
+    }
 
-    const loadImageFromUrl = (url: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = url; });
+    const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
+      new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = url; });
+
+    let overlayPlacement: {
+      img: HTMLImageElement;
+      sx: number;
+      sy: number;
+      sWidth: number;
+      sHeight: number;
+      dx: number;
+      dy: number;
+      dWidth: number;
+      dHeight: number;
+    } | null = null;
+
+    // Special handling for glass protector: overlay glass protector image offset to the left
+    if (service.id === 'screen-protector-glass' && service.centerOverlayImage) {
+      try {
+        const glassImg = await loadImageFromUrl(service.centerOverlayImage);
+
+        // Get glass protector's content bounds
+        const glassBounds = detectContentBounds(glassImg, {
+          // Use a high alpha threshold to catch the opaque bezel only,
+          // ignoring faint semi-transparent haze that expands the bounds.
+          alphaThreshold: 160,
+          padding: 2,
+        });
+        if (glassBounds) {
+          const glassScaleH = phonePlacement.drawHeight / glassBounds.height;
+          const glassW = glassBounds.width * glassScaleH;
+          const glassH = phonePlacement.drawHeight;
+
+          // 至少要有的重叠像素，避免任何“缝隙”。
+          const minOverlap = Math.max(12, Math.min(glassW * 0.5, phonePlacement.drawWidth * 0.55));
+
+          // 组合宽度（按最小重叠计算）
+          const comboWidth = phonePlacement.drawWidth + glassW - minOverlap;
+
+          // 优先整体居中；如果太宽放不下，就退化为“贴着手机左侧”，仍保证最小重叠
+          if (!phonePlacement.isCropped && comboWidth <= OUTPUT_SIZE) {
+            const baseLeft = (OUTPUT_SIZE - comboWidth) / 2 + centerOffsetX;
+            const comboLeft = Math.max(0, Math.min(OUTPUT_SIZE - comboWidth, baseLeft));
+            const phoneLeft = comboLeft + glassW - minOverlap;
+            phonePlacement.drawX = phoneLeft;
+            overlayPlacement = {
+              img: glassImg,
+              sx: glassBounds.x,
+              sy: glassBounds.y,
+              sWidth: glassBounds.width,
+              sHeight: glassBounds.height,
+              dx: comboLeft,
+              dy: phonePlacement.drawY,
+              dWidth: glassW,
+              dHeight: glassH,
+            };
+          } else {
+            // 居中放不下：把手机保持原位，玻璃靠到手机左侧，强制最小重叠
+            const glassDx = phonePlacement.drawX - (glassW - minOverlap);
+            overlayPlacement = {
+              img: glassImg,
+              sx: glassBounds.x,
+              sy: glassBounds.y,
+              sWidth: glassBounds.width,
+              sHeight: glassBounds.height,
+              dx: glassDx,
+              dy: phonePlacement.drawY,
+              dWidth: glassW,
+              dHeight: glassH,
+            };
+          }
+        }
+      } catch {}
+    }
+
+    // Draw the phone first (may have updated X when overlay is present)
+    drawMeasured(baseCanvas, phonePlacement);
+
+    if (overlayPlacement) {
+      (ctx as any).imageSmoothingEnabled = true;
+      try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
+      const prev = (ctx as any).filter ?? 'none';
+      (ctx as any).filter = 'blur(0.15px)';
+
+      ctx.drawImage(
+        overlayPlacement.img,
+        overlayPlacement.sx,
+        overlayPlacement.sy,
+        overlayPlacement.sWidth,
+        overlayPlacement.sHeight,
+        overlayPlacement.dx,
+        overlayPlacement.dy,
+        overlayPlacement.dWidth,
+        overlayPlacement.dHeight,
+      );
+
+      (ctx as any).filter = prev || 'none';
+    }
+
     const badges = (service.layout as any).edgeBadges as { src: string; widthRatio: number; yRatio: number; side: 'left'|'right' }[] | undefined;
     if (badges && badges.length) {
       for (const badge of badges) {
@@ -437,6 +634,11 @@ const composeFinalLayout = async (
           ctx.drawImage(img, dx, dy, badgeW, badgeH);
         } catch {}
       }
+    }
+
+    // Draw SKU text before returning
+    if (showSkuOnImage && sku && sku.trim()) {
+      drawSkuText(ctx, sku);
     }
 
     return canvasToObjectUrl(finalCanvas);
@@ -508,16 +710,25 @@ const composeFinalLayout = async (
       }
     }
 
+    // Draw SKU text before returning
+    if (showSkuOnImage && sku && sku.trim()) {
+      drawSkuText(ctx, sku);
+    }
+
     return canvasToObjectUrl(finalCanvas);
   }
 
   // side-by-side (默认并排布局)
-  const targetHeight = defaultTargetHeight;
-  drawDrawable(baseCanvas, 0, columnWidth, targetHeight);
+  const dividerWidth = 0;
+  const columnWidth = OUTPUT_SIZE / 2;
+  const leftHeightRatio = (service.layout as any).leftHeightRatio ?? 0.80;
+  const leftTargetHeight = Math.floor(OUTPUT_SIZE * leftHeightRatio);
+  const rightTargetHeight = Math.floor(OUTPUT_SIZE * 0.80); // 右边固定80%
+  drawDrawable(baseCanvas, 0, columnWidth, leftTargetHeight);
 
   try {
     const originalImage = await loadImageFromFile(originalFile);
-    drawDrawable(originalImage, columnWidth + dividerWidth, columnWidth, targetHeight);
+    drawDrawable(originalImage, columnWidth + dividerWidth, columnWidth, rightTargetHeight);
   } catch {}
 
   if ((service.layout as any).badges && (service.layout as any).badges.length > 0) {
@@ -536,6 +747,43 @@ const composeFinalLayout = async (
     }
   }
 
+  // Draw center badges (bottom center, side by side)
+  if ((service.layout as any).centerBadges && (service.layout as any).centerBadges.length > 0) {
+    const centerBadges = (service.layout as any).centerBadges as { src: string; widthRatio: number; yRatio: number }[];
+    const spacing = 16; // Space between badges
+
+    // Load all badges first to calculate total width
+    const loadedBadges: { img: HTMLImageElement; width: number; height: number }[] = [];
+    for (const badge of centerBadges) {
+      try {
+        const img = await loadImageFromUrl(badge.src);
+        const badgeW = Math.max(8, Math.min(OUTPUT_SIZE, OUTPUT_SIZE * (badge.widthRatio ?? 0.06)));
+        const aspect = img.naturalHeight && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1;
+        const badgeH = badgeW * aspect;
+        loadedBadges.push({ img, width: badgeW, height: badgeH });
+      } catch {}
+    }
+
+    // Calculate total width including spacing
+    const totalWidth = loadedBadges.reduce((sum, b) => sum + b.width, 0) + spacing * (loadedBadges.length - 1);
+
+    // Starting X position (centered)
+    let currentX = (OUTPUT_SIZE - totalWidth) / 2;
+    const yPos = OUTPUT_SIZE * (centerBadges[0]?.yRatio ?? 0.86);
+
+    // Draw each badge
+    for (const badge of loadedBadges) {
+      const dy = Math.round(yPos - badge.height / 2);
+      ctx.drawImage(badge.img, currentX, dy, badge.width, badge.height);
+      currentX += badge.width + spacing;
+    }
+  }
+
+  // Draw SKU text at the top if enabled
+  if (showSkuOnImage && sku && sku.trim()) {
+    drawSkuText(ctx, sku);
+  }
+
   return canvasToObjectUrl(finalCanvas);
 };
 
@@ -546,7 +794,9 @@ export const useImageProcessing = () => {
 
   const processImages = useCallback(async (
     deviceImages: DeviceImages,
-    selections: Record<string, ServiceSelection>
+    selections: Record<string, ServiceSelection>,
+    sku?: string,
+    showSkuOnImage?: boolean
   ) => {
     setIsProcessing(true);
     setProcessedImages([]);
@@ -566,17 +816,49 @@ export const useImageProcessing = () => {
 
         // Determine source image based on service config
         let sourceImage: File | null = null;
-        if (serviceConfig.needsPartImage && selection.customImage) {
-          sourceImage = selection.customImage;
+        let useDefaultImage = false;
+
+        if (serviceConfig.needsPartImage) {
+          if (selection.customImage) {
+            sourceImage = selection.customImage;
+          } else if (serviceConfig.defaultPartImage) {
+            // Will load from URL later
+            useDefaultImage = true;
+          }
         } else if (serviceConfig.useModelSide === 'front') {
           sourceImage = deviceImages.front;
         } else if (serviceConfig.useModelSide === 'back') {
           sourceImage = deviceImages.back;
         }
 
-        if (!sourceImage) continue;
+        if (!sourceImage && !useDefaultImage) {
+          console.warn('⚠️ No source image for service:', {
+            serviceId: selection.serviceId,
+            title: serviceConfig.titleCN,
+            needsPartImage: serviceConfig.needsPartImage,
+            useModelSide: serviceConfig.useModelSide,
+            hasFront: !!deviceImages.front,
+            hasBack: !!deviceImages.back,
+            hasCustom: !!selection.customImage
+          });
+          continue;
+        }
+
+        // If using default image, fetch it and convert to File
+        if (useDefaultImage && serviceConfig.defaultPartImage) {
+          const response = await fetch(serviceConfig.defaultPartImage);
+          const blob = await response.blob();
+          sourceImage = new File([blob], 'default-part.png', { type: blob.type });
+          console.log('✅ Loaded default image:', serviceConfig.defaultPartImage, 'for service:', serviceConfig.titleCN);
+        }
+
+        if (!sourceImage) {
+          console.error('❌ Failed to get source image for service:', serviceConfig.titleCN);
+          continue;
+        }
 
         const originalImageUrl = URL.createObjectURL(sourceImage);
+        console.log('✅ Created originalImageUrl:', originalImageUrl, 'for service:', serviceConfig.titleCN);
 
         // Generate base effect and compose final layout using cached device bounds
         const baseCanvas = await renderBaseCanvas(
@@ -594,7 +876,10 @@ export const useImageProcessing = () => {
           baseCanvas,
           sourceImage,
           boundsRef,
+          sku,
+          showSkuOnImage
         );
+        console.log('✅ Created processedImageUrl:', processedImageUrl, 'for service:', serviceConfig.titleCN);
 
         const processedImage: ProcessedImage = {
           serviceId: selection.serviceId,
@@ -603,7 +888,18 @@ export const useImageProcessing = () => {
           approved: false,
         };
 
-        setProcessedImages(prev => [...prev, processedImage]);
+        console.log('📦 Adding to processedImages:', {
+          serviceId: selection.serviceId,
+          title: serviceConfig.titleCN,
+          originalUrl: originalImageUrl.substring(0, 50) + '...',
+          processedUrl: processedImageUrl.substring(0, 50) + '...',
+        });
+
+        setProcessedImages(prev => {
+          const newImages = [...prev, processedImage];
+          console.log('🔄 Updated processedImages count:', newImages.length, 'services:', newImages.map(i => i.serviceId));
+          return newImages;
+        });
       }
 
       toast({
