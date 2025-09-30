@@ -12,6 +12,13 @@ interface ContentBounds {
   height: number;
 }
 
+interface NormalizedBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const canvasToObjectUrl = (canvas: HTMLCanvasElement): Promise<string> => {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
@@ -137,7 +144,39 @@ const detectContentBounds = (img: HTMLImageElement): ContentBounds | null => {
   };
 };
 
-const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanvasElement> => {
+const normalizeBounds = (bounds: ContentBounds, width: number, height: number): NormalizedBounds => ({
+  x: bounds.x / width,
+  y: bounds.y / height,
+  width: bounds.width / width,
+  height: bounds.height / height,
+});
+
+const denormalizeBounds = (bounds: NormalizedBounds, width: number, height: number): ContentBounds => ({
+  x: bounds.x * width,
+  y: bounds.y * height,
+  width: bounds.width * width,
+  height: bounds.height * height,
+});
+
+const mergeNormalizedBounds = (a: NormalizedBounds, b: NormalizedBounds): NormalizedBounds => {
+  const minX = Math.min(a.x, b.x);
+  const minY = Math.min(a.y, b.y);
+  const maxX = Math.max(a.x + a.width, b.x + b.width);
+  const maxY = Math.max(a.y + a.height, b.y + b.height);
+  return {
+    x: Math.max(0, minX),
+    y: Math.max(0, minY),
+    width: Math.min(1, maxX) - Math.max(0, minX),
+    height: Math.min(1, maxY) - Math.max(0, minY),
+  };
+};
+
+const renderBaseCanvas = (
+  file: File,
+  service: RepairService,
+  normalizedBounds: NormalizedBounds | null,
+  onBoundsReady?: (bounds: NormalizedBounds) => NormalizedBounds,
+): Promise<HTMLCanvasElement> => {
   return new Promise((resolve) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -192,12 +231,21 @@ const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanva
       } catch {}
 
       if (service.overlayArea) {
-        const bounds = detectContentBounds(img) ?? {
+        const computedBounds = detectContentBounds(img) ?? {
           x: 0,
           y: 0,
           width: sourceWidth,
           height: sourceHeight,
         };
+
+        const normalizedComputed = normalizeBounds(computedBounds, sourceWidth, sourceHeight);
+        const activeNormalized = onBoundsReady
+          ? onBoundsReady(normalizedComputed)
+          : normalizedBounds ?? normalizedComputed;
+
+        const bounds = activeNormalized
+          ? denormalizeBounds(activeNormalized, sourceWidth, sourceHeight)
+          : computedBounds;
 
         const overlay = service.overlayArea;
         const screenX = offsetX + (bounds.x + bounds.width * overlay.x) * scale;
@@ -255,6 +303,26 @@ const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanva
           return;
         }
 
+        // Center overlay image (e.g., no-power warning) without circular clip
+        if (service.centerOverlayImage) {
+          const icon = new Image();
+          icon.onload = () => {
+            const ratio = Math.max(0.05, Math.min(1, service.centerOverlayRatio ?? 0.5));
+            const targetW = screenWidth * ratio;
+            const aspect = icon.naturalHeight && icon.naturalWidth ? icon.naturalHeight / icon.naturalWidth : 1;
+            const targetH = targetW * aspect;
+            const cx = screenX + screenWidth / 2;
+            const cy = screenY + screenHeight / 2;
+            const dx = Math.round(cx - targetW / 2);
+            const dy = Math.round(cy - targetH / 2);
+            ctx.drawImage(icon, dx, dy, targetW, targetH);
+            finishWithRestore();
+          };
+          icon.onerror = finishWithRestore;
+          icon.src = service.centerOverlayImage;
+          return;
+        }
+
         finishWithRestore();
         return;
       }
@@ -289,9 +357,10 @@ const loadImageFromFile = (file: File): Promise<HTMLImageElement> => {
 const composeFinalLayout = async (
   service: RepairService,
   baseCanvas: HTMLCanvasElement,
-  originalFile: File
+  originalFile: File,
+  normalizedBounds: NormalizedBounds | null
 ): Promise<string> => {
-  if (!service.layout || service.layout.type !== 'side-by-side') {
+  if (!service.layout) {
     return canvasToObjectUrl(baseCanvas);
   }
 
@@ -307,93 +376,164 @@ const composeFinalLayout = async (
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-  // Remove center divider per user request
-  const dividerWidth = 0;
-  const columnWidth = OUTPUT_SIZE / 2;
+  // Single-centered layout: draw only processed phone centered, then edge badges
+  if (service.layout.type === 'single-centered') {
+    const targetH = Math.floor(OUTPUT_SIZE * ((service.layout as any).targetHeightRatio ?? 0.8));
 
-  const targetHeight = Math.floor(OUTPUT_SIZE * 0.80); // target ~80% of canvas height
+    const getBoundsSingle = (drawable: HTMLCanvasElement | HTMLImageElement): ContentBounds => {
+      const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+      const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+      if (normalizedBounds) {
+        return denormalizeBounds(normalizedBounds, sw, sh);
+      }
+      return { x: 0, y: 0, width: sw, height: sh };
+    };
 
-  // Utility to compute tight alpha bounds of a drawable
-  const getBounds = (drawable: HTMLCanvasElement | HTMLImageElement): ContentBounds => {
+    const drawCentered = (drawable: HTMLCanvasElement | HTMLImageElement) => {
+      const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+      const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+      if (sw === 0 || sh === 0) return;
+      const b = getBoundsSingle(drawable);
+      const scaleH = targetH / b.height;
+      const scaledW = b.width * scaleH;
+      const scaledH = targetH;
+
+      (ctx as any).imageSmoothingEnabled = true;
+      try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
+      const prev = (ctx as any).filter ?? 'none';
+      (ctx as any).filter = 'blur(0.15px)';
+
+      if (scaledW <= OUTPUT_SIZE) {
+        const dx = (OUTPUT_SIZE - scaledW) / 2;
+        const dy = (OUTPUT_SIZE - scaledH) / 2;
+        ctx.drawImage(drawable, b.x, b.y, b.width, b.height, dx, dy, scaledW, scaledH);
+      } else {
+        const ratio = OUTPUT_SIZE / scaledW;
+        const cropW = b.width * ratio;
+        const sx = b.x + (b.width - cropW) / 2;
+        const sy = b.y;
+        const dx = 0;
+        const dy = (OUTPUT_SIZE - scaledH) / 2;
+        ctx.drawImage(drawable, sx, sy, cropW, b.height, dx, dy, OUTPUT_SIZE, scaledH);
+      }
+
+      (ctx as any).filter = prev || 'none';
+    };
+
+    drawCentered(baseCanvas);
+
+    const loadImageFromUrl = (url: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = url; });
+    const badges = (service.layout as any).edgeBadges as { src: string; widthRatio: number; yRatio: number; side: 'left'|'right' }[] | undefined;
+    if (badges && badges.length) {
+      for (const badge of badges) {
+        try {
+          const img = await loadImageFromUrl(badge.src);
+          const badgeW = Math.max(8, Math.min(OUTPUT_SIZE, OUTPUT_SIZE * (badge.widthRatio ?? 0.06)));
+          const aspect = img.naturalHeight && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1;
+          const badgeH = badgeW * aspect;
+          const margin = 12;
+          const dx = badge.side === 'left' ? margin : OUTPUT_SIZE - badgeW - margin;
+          const dy = Math.round(OUTPUT_SIZE * (badge.yRatio ?? 0.85) - badgeH / 2);
+          ctx.drawImage(img, dx, dy, badgeW, badgeH);
+        } catch {}
+      }
+    }
+
+    return canvasToObjectUrl(finalCanvas);
+  }
+
+  const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const asset = new Image();
+      asset.onload = () => resolve(asset);
+      asset.onerror = reject;
+      asset.src = url;
+    });
+
+  const drawDrawable = (
+    drawable: HTMLCanvasElement | HTMLImageElement,
+    regionX: number,
+    regionWidth: number,
+    targetHeight: number,
+  ) => {
     const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
     const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
-    const temp = document.createElement('canvas');
-    temp.width = sw; temp.height = sh;
-    const tctx = temp.getContext('2d');
-    if (!tctx) return { x: 0, y: 0, width: sw, height: sh };
-    tctx.clearRect(0,0,sw,sh);
-    tctx.drawImage(drawable as any, 0, 0, sw, sh);
-    try {
-      const id = tctx.getImageData(0,0,sw,sh);
-      const data = id.data;
-      let minX = sw, minY = sh, maxX = -1, maxY = -1;
-      for (let y = 0; y < sh; y++) {
-        for (let x = 0; x < sw; x++) {
-          const a = data[(y*sw + x)*4 + 3];
-          if (a > 10) {
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      if (maxX === -1 || maxY === -1) return { x: 0, y: 0, width: sw, height: sh };
-      return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
-    } catch {
-      return { x: 0, y: 0, width: sw, height: sh };
-    }
-  };
-
-  const drawDrawable = (drawable: HTMLCanvasElement | HTMLImageElement, startX: number) => {
-    const sw = drawable instanceof HTMLImageElement
-      ? (drawable.naturalWidth || drawable.width)
-      : drawable.width;
-    const sh = drawable instanceof HTMLImageElement
-      ? (drawable.naturalHeight || drawable.height)
-      : drawable.height;
     if (sw === 0 || sh === 0) return;
 
-    // Tight alpha bounds -> unify content box across inputs
-    const b = getBounds(drawable);
+    const bounds = normalizedBounds
+      ? denormalizeBounds(normalizedBounds, sw, sh)
+      : { x: 0, y: 0, width: sw, height: sh };
 
-    // Height-only scaling to enforce identical visual height
-    const scaleH = targetHeight / b.height;
-    const scaledW = b.width * scaleH;
-    const scaledH = targetHeight; // always
+    const scaleH = targetHeight / bounds.height;
+    const scaledW = bounds.width * scaleH;
+    const scaledH = targetHeight;
 
-    // High quality sampling for layout stage
     (ctx as any).imageSmoothingEnabled = true;
     try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
     const prev = (ctx as any).filter ?? 'none';
     (ctx as any).filter = 'blur(0.15px)';
 
-    if (scaledW <= columnWidth) {
-      // No overflow: center horizontally
-      const dx = startX + (columnWidth - scaledW) / 2;
+    if (scaledW <= regionWidth) {
+      const dx = regionX + (regionWidth - scaledW) / 2;
       const dy = (OUTPUT_SIZE - scaledH) / 2;
-      ctx.drawImage(drawable, b.x, b.y, b.width, b.height, dx, dy, scaledW, scaledH);
+      ctx.drawImage(drawable, bounds.x, bounds.y, bounds.width, bounds.height, dx, dy, scaledW, scaledH);
     } else {
-      // Overflow horizontally: crop source around center to fit column width
-      const ratio = columnWidth / scaledW; // < 1
-      const cropW = b.width * ratio; // source crop width
-      const sx = b.x + (b.width - cropW) / 2;
-      const sy = b.y;
-      const dx = startX; // fill full column
+      const ratio = regionWidth / scaledW;
+      const cropW = bounds.width * ratio;
+      const sx = bounds.x + (bounds.width - cropW) / 2;
       const dy = (OUTPUT_SIZE - scaledH) / 2;
-      ctx.drawImage(drawable, sx, sy, cropW, b.height, dx, dy, columnWidth, scaledH);
+      ctx.drawImage(drawable, sx, bounds.y, cropW, bounds.height, regionX, dy, regionWidth, scaledH);
     }
 
     (ctx as any).filter = prev || 'none';
   };
 
-  drawDrawable(baseCanvas, 0);
+  if (service.layout.type === 'single-centered') {
+    const targetH = Math.floor(OUTPUT_SIZE * ((service.layout as any).targetHeightRatio ?? 0.8));
+    drawDrawable(baseCanvas, 0, OUTPUT_SIZE, targetH);
+
+    const badges = (service.layout as any).edgeBadges as { src: string; widthRatio: number; yRatio: number; side: 'left' | 'right' }[] | undefined;
+    if (badges && badges.length) {
+      for (const badge of badges) {
+        try {
+          const img = await loadImageFromUrl(badge.src);
+          const badgeW = Math.max(8, Math.min(OUTPUT_SIZE, OUTPUT_SIZE * (badge.widthRatio ?? 0.06)));
+          const aspect = img.naturalHeight && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1;
+          const badgeH = badgeW * aspect;
+          const margin = 12;
+          const dx = badge.side === 'left' ? margin : OUTPUT_SIZE - badgeW - margin;
+          const dy = Math.round(OUTPUT_SIZE * (badge.yRatio ?? 0.85) - badgeH / 2);
+          ctx.drawImage(img, dx, dy, badgeW, badgeH);
+        } catch {}
+      }
+    }
+
+    return canvasToObjectUrl(finalCanvas);
+  }
+
+  // side-by-side (默认并排布局)
+  const targetHeight = defaultTargetHeight;
+  drawDrawable(baseCanvas, 0, columnWidth, targetHeight);
 
   try {
     const originalImage = await loadImageFromFile(originalFile);
-    drawDrawable(originalImage, columnWidth + dividerWidth);
-  } catch {
-    // If original image fails to load, leave the right side blank.
+    drawDrawable(originalImage, columnWidth + dividerWidth, columnWidth, targetHeight);
+  } catch {}
+
+  if ((service.layout as any).badges && (service.layout as any).badges.length > 0) {
+    for (const badge of (service.layout as any).badges) {
+      try {
+        const img = await loadImageFromUrl(badge.src);
+        const badgeW = Math.max(8, Math.min(OUTPUT_SIZE, OUTPUT_SIZE * (badge.widthRatio ?? 0.06)));
+        const aspect = img.naturalHeight && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1;
+        const badgeH = badgeW * aspect;
+        const cx = columnWidth;
+        const cy = OUTPUT_SIZE * (badge.yRatio ?? 0.5);
+        const dx = Math.round(cx - badgeW / 2);
+        const dy = Math.round(cy - badgeH / 2);
+        ctx.drawImage(img, dx, dy, badgeW, badgeH);
+      } catch {}
+    }
   }
 
   return canvasToObjectUrl(finalCanvas);
@@ -402,6 +542,7 @@ const composeFinalLayout = async (
 export const useImageProcessing = () => {
   const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [normalizedBounds, setNormalizedBounds] = useState<NormalizedBounds | null>(null);
 
   const processImages = useCallback(async (
     deviceImages: DeviceImages,
@@ -409,8 +550,10 @@ export const useImageProcessing = () => {
   ) => {
     setIsProcessing(true);
     setProcessedImages([]);
+    setNormalizedBounds(null);
 
     const selectedServices = Object.values(selections).filter(s => s.isSelected);
+    let boundsRef: NormalizedBounds | null = null;
     
     try {
       for (const selection of selectedServices) {
@@ -435,9 +578,23 @@ export const useImageProcessing = () => {
 
         const originalImageUrl = URL.createObjectURL(sourceImage);
 
-        // Generate base effect and compose final layout if needed
-        const baseCanvas = await renderBaseCanvas(sourceImage, serviceConfig);
-        const processedImageUrl = await composeFinalLayout(serviceConfig, baseCanvas, sourceImage);
+        // Generate base effect and compose final layout using cached device bounds
+        const baseCanvas = await renderBaseCanvas(
+          sourceImage,
+          serviceConfig,
+          boundsRef,
+          (bounds) => {
+            boundsRef = boundsRef ? mergeNormalizedBounds(boundsRef, bounds) : bounds;
+            setNormalizedBounds(boundsRef);
+            return boundsRef;
+          },
+        );
+        const processedImageUrl = await composeFinalLayout(
+          serviceConfig,
+          baseCanvas,
+          sourceImage,
+          boundsRef,
+        );
 
         const processedImage: ProcessedImage = {
           serviceId: selection.serviceId,
@@ -454,9 +611,11 @@ export const useImageProcessing = () => {
         description: `${selectedServices.length} imágenes procesadas correctamente.`,
       });
     } catch (error) {
+      console.error('❌ Processing error:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
       toast({
         title: "Error en el procesamiento",
-        description: "Hubo un error al procesar las imágenes.",
+        description: `Error: ${errorMsg}`,
         variant: "destructive"
       });
     } finally {

@@ -31,6 +31,10 @@ export const noUploadServices: RepairService[] = [
       type: 'side-by-side',
       dividerColor: '#0f172a',
       dividerWidthRatio: 0,
+      badges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.62 },
+      ],
     },
     implemented: true
   },
@@ -59,6 +63,10 @@ export const noUploadServices: RepairService[] = [
       type: 'side-by-side',
       dividerColor: '#0f172a',
       dividerWidthRatio: 0,
+      badges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.62 },
+      ],
     },
     implemented: true,
   },
@@ -90,6 +98,24 @@ export const noUploadServices: RepairService[] = [
     category: 'system',
     thumbnail: '/service-previews/Reparar Xiaomi 15 Ultra No....jpg',
     needsPartImage: false,
-    useModelSide: 'front'
+    useModelSide: 'front',
+    overlayArea: {
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    },
+    fillColor: '#000000',
+    centerOverlayImage: '/assets/overlays/no-power.png',
+    centerOverlayRatio: 0.68,
+    layout: {
+      type: 'single-centered',
+      targetHeightRatio: 0.80,
+      edgeBadges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.86, side: 'left' },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.86, side: 'right' },
+      ],
+    },
+    implemented: true
   }
 ];

@@ -31,6 +31,19 @@ export const ALL_SERVICES = [
   ...buttonServices,         // 按键类
 ];
 
+// 开发期唯一性校验：确保 service.id 不重复，避免 UI/处理管线出现“撞 ID”问题
+// 构建生产环境不执行这段逻辑，以免因第三方注入导致打断。Vite 会在 dev 下内联 import.meta.env.DEV。
+if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) {
+  const seen = new Set<string>();
+  for (const s of ALL_SERVICES) {
+    if (seen.has(s.id)) {
+      // 直接抛错，尽早在开发时发现问题
+      throw new Error(`[services] Duplicate service id detected: "${s.id}"`);
+    }
+    seen.add(s.id);
+  }
+}
+
 // 按类别分组导出（可选，方便未来需要按类别展示）
 export const SERVICE_GROUPS = {
   noUpload: noUploadServices,
