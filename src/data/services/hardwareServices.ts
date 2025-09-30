@@ -14,7 +14,7 @@ export const hardwareServices: RepairService[] = [
     thumbnail: '/service-previews/Cambiar Conector de Carga....jpg',
     needsPartImage: true,
     defaultPartImage: '/assets/parts/charging-port.png',
-    useModelSide: 'back',
+    useModelSide: 'front',  // 右边使用正面模型图
     layout: {
       type: 'side-by-side',
       leftHeightRatio: 0.35,  // 充电口缩小到35%高度
@@ -32,6 +32,17 @@ export const hardwareServices: RepairService[] = [
     description: '更换内置电池（解决电量下降和老化问题）',
     category: 'hardware',
     thumbnail: '/service-previews/Cambiar Batería Xiaomi 15....jpg',
-    needsPartImage: true
+    needsPartImage: true,
+    defaultPartImage: '/assets/parts/battery.png',
+    useModelSide: 'front',
+    layout: {
+      type: 'side-by-side',
+      leftHeightRatio: 0.35,  // 电池缩放到画布高度的 35%
+      badges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.62 },
+      ],
+    },
+    implemented: true
   }
 ];

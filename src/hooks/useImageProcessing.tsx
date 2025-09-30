@@ -254,9 +254,12 @@ const renderBaseCanvas = (
       };
 
       const normalizedComputed = normalizeBounds(computedBounds, sourceWidth, sourceHeight);
-      const activeNormalized = onBoundsReady
+      // 只有“使用模型图”的服务（非配件图）才会发布设备轮廓，避免配件图污染全局 bounds。
+      const shouldPublishBounds = !service.needsPartImage;
+      const published = shouldPublishBounds && onBoundsReady
         ? onBoundsReady(normalizedComputed)
-        : normalizedBounds ?? normalizedComputed;
+        : (shouldPublishBounds ? (normalizedBounds ?? normalizedComputed) : null);
+      const activeNormalized = published ?? null;
 
       const bounds = activeNormalized
         ? denormalizeBounds(activeNormalized, sourceWidth, sourceHeight)
@@ -596,6 +599,61 @@ const composeFinalLayout = async (
       } catch {}
     }
 
+    // Special handling for hydrogel protector: mirrored to the RIGHT side
+    if (service.id === 'screen-protector-hydrogel' && service.centerOverlayImage) {
+      try {
+        const gelImg = await loadImageFromUrl(service.centerOverlayImage);
+
+        const gelBounds = detectContentBounds(gelImg, {
+          // 水凝膜整体透明度较低，最高 alpha 仅 ~54/255，因此要用低阈值
+          alphaThreshold: 2,
+          padding: 2,
+        });
+        if (gelBounds) {
+          const gelScaleH = phonePlacement.drawHeight / gelBounds.height;
+          const gelW = gelBounds.width * gelScaleH;
+          const gelH = phonePlacement.drawHeight;
+
+          const minOverlap = Math.max(12, Math.min(gelW * 0.5, phonePlacement.drawWidth * 0.55));
+          const comboWidth = phonePlacement.drawWidth + gelW - minOverlap;
+
+          if (!phonePlacement.isCropped && comboWidth <= OUTPUT_SIZE) {
+            const baseLeft = (OUTPUT_SIZE - comboWidth) / 2 + centerOffsetX;
+            const comboLeft = Math.max(0, Math.min(OUTPUT_SIZE - comboWidth, baseLeft));
+            // phone stays at left within combo, overlay at right
+            const phoneLeft = comboLeft;
+            const gelLeft = comboLeft + phonePlacement.drawWidth - minOverlap;
+            phonePlacement.drawX = phoneLeft;
+            overlayPlacement = {
+              img: gelImg,
+              sx: gelBounds.x,
+              sy: gelBounds.y,
+              sWidth: gelBounds.width,
+              sHeight: gelBounds.height,
+              dx: gelLeft,
+              dy: phonePlacement.drawY,
+              dWidth: gelW,
+              dHeight: gelH,
+            };
+          } else {
+            // Fallback: phone fixed, overlay on the right with required overlap
+            const gelDx = phonePlacement.drawX + phonePlacement.drawWidth - minOverlap;
+            overlayPlacement = {
+              img: gelImg,
+              sx: gelBounds.x,
+              sy: gelBounds.y,
+              sWidth: gelBounds.width,
+              sHeight: gelBounds.height,
+              dx: gelDx,
+              dy: phonePlacement.drawY,
+              dWidth: gelW,
+              dHeight: gelH,
+            };
+          }
+        }
+      } catch {}
+    }
+
     // Draw the phone first (may have updated X when overlay is present)
     drawMeasured(baseCanvas, phonePlacement);
 
@@ -871,10 +929,24 @@ export const useImageProcessing = () => {
             return boundsRef;
           },
         );
+        // Choose the right-side reference image:
+        // - For services with part images, the right panel should show the phone model (front/back);
+        // - Otherwise, default to the same source image.
+        let rightSideFile: File = sourceImage;
+        if (serviceConfig.needsPartImage) {
+          const preferFront = serviceConfig.useModelSide === 'front';
+          const preferBack = serviceConfig.useModelSide === 'back';
+          const front = deviceImages.front ?? null;
+          const back = deviceImages.back ?? null;
+          if (preferFront && front) rightSideFile = front;
+          else if (preferBack && back) rightSideFile = back;
+          else if (front || back) rightSideFile = (front ?? back)!; // fall back to any available model image
+        }
+
         const processedImageUrl = await composeFinalLayout(
           serviceConfig,
           baseCanvas,
-          sourceImage,
+          rightSideFile,
           boundsRef,
           sku,
           showSkuOnImage
