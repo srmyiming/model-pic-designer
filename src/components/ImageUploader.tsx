@@ -258,31 +258,47 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
         </p>
       </div>
 
-      {/* 示例图展示 */}
-      <div className="bg-muted/30 rounded-lg p-3 border border-dashed border-muted-foreground/30">
-        <div className="flex items-center gap-2 mb-2">
-          <AlertCircle className="h-3.5 w-3.5 text-primary" />
-          <h3 className="text-xs font-semibold">参考示例</h3>
+      {/* 重要提示 */}
+      <details className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
+        <summary className="flex items-center gap-2 cursor-pointer select-none">
+          <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+          <span className="text-sm font-semibold text-yellow-900 dark:text-yellow-200">
+            ⚠️ 样机壁纸要求（点击查看）
+          </span>
+        </summary>
+        <div className="mt-2 text-xs text-yellow-800 dark:text-yellow-300 space-y-1">
+          <p>✅ <strong>推荐：</strong>使用深色壁纸（黑色/深灰色）的样机，抠图效果更好</p>
+          <p>❌ <strong>不推荐：</strong>浅色系列壁纸（包括彩色渐变、亮色背景等）会影响后续处理</p>
         </div>
-        <div className="grid md:grid-cols-2 gap-3 max-w-2xl mx-auto">
-          <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground">正面示例（白底、居中）</p>
+      </details>
+
+      {/* 示例图展示（默认折叠，减少占用） */}
+      <details className="bg-muted/30 rounded-lg p-4 border border-dashed border-muted-foreground/30">
+        <summary className="flex items-center gap-2 cursor-pointer select-none">
+          <Check className="h-4 w-4 text-green-600" />
+          <span className="text-sm font-semibold">推荐样机示例（点击展开）</span>
+        </summary>
+        <div className="grid md:grid-cols-2 gap-4 max-w-3xl mx-auto mt-3">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-green-600">✓ 正确示例（深色壁纸）</p>
             <img
-              src="/example-front.png"
-              alt="正面示例"
-              className="w-full h-32 object-contain rounded border bg-white"
+              src="/assets/examples/example-dark-wallpaper.png"
+              alt="推荐样机"
+              className="w-full h-36 object-contain rounded-lg border-2 border-green-200 bg-white"
             />
+            <p className="text-[10px] text-muted-foreground">黑/深灰色壁纸，边缘清晰，易于抠图</p>
           </div>
-          <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground">背面示例（白底、居中）</p>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-red-600">✗ 错误示例（彩色壁纸）</p>
             <img
-              src="/example-back.png"
-              alt="背面示例"
-              className="w-full h-32 object-contain rounded border bg-white"
+              src="/assets/examples/example-front.png"
+              alt="不推荐样机"
+              className="w-full h-36 object-contain rounded-lg border-2 border-red-200 bg-white opacity-60"
             />
+            <p className="text-[10px] text-muted-foreground">浅色系列壁纸，抠图效果差</p>
           </div>
         </div>
-      </div>
+      </details>
 
       <div className="grid md:grid-cols-2 gap-6">
         <ImageUploadCard type="front" file={deviceImages.front} />
