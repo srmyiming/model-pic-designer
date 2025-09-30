@@ -2,16 +2,17 @@ import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Check, AlertCircle } from 'lucide-react';
-import { DeviceImages } from '@/types/repair';
+import { DeviceImages, BackgroundRemovalConfig } from '@/types/repair';
 import { toast } from '@/hooks/use-toast';
 import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
 
 interface ImageUploaderProps {
   deviceImages: DeviceImages;
   onImagesChange: (images: DeviceImages) => void;
+  bgRemovalConfig: BackgroundRemovalConfig;
 }
 
-export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderProps) => {
+export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }: ImageUploaderProps) => {
   const [dragOver, setDragOver] = useState<'front' | 'back' | null>(null);
   const [validating, setValidating] = useState(false);
   const [processingSide, setProcessingSide] = useState<'front' | 'back' | null>(null);
@@ -87,37 +88,50 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
     setProcessingSide(type);
 
     try {
-      // Remove background automatically
-      toast({
-        title: "正在处理",
-        description: "正在自动去除背景，请稍候...",
-      });
+      let finalFile: File;
 
-      const processedBlob = await removeImageBackground(file);
-
-      if (!processedBlob) {
+      if (bgRemovalConfig.enabled) {
+        // Remove background automatically
         toast({
-          title: "处理失败",
-          description: "背景去除失败，请重试。",
-          variant: "destructive"
+          title: "正在处理",
+          description: `正在自动去除背景（${bgRemovalConfig.useWebGPU ? 'GPU加速' : 'CPU模式'}），请稍候...`,
         });
-        setValidating(false);
-        setProcessingSide(null);
-        return;
-      }
 
-      // Convert Blob to File
-      const processedFile = new File([processedBlob], file.name, { type: 'image/png' });
+        const processedBlob = await removeImageBackground(file, bgRemovalConfig.useWebGPU);
+
+        if (!processedBlob) {
+          toast({
+            title: "处理失败",
+            description: "背景去除失败，请重试。",
+            variant: "destructive"
+          });
+          setValidating(false);
+          setProcessingSide(null);
+          return;
+        }
+
+        // Convert Blob to File
+        finalFile = new File([processedBlob], file.name, { type: 'image/png' });
+
+        toast({
+          title: "图片已上传",
+          description: `${type === 'front' ? '正面' : '背面'}图片已自动去除背景。`,
+          variant: "default"
+        });
+      } else {
+        // Use original image without background removal
+        finalFile = file;
+
+        toast({
+          title: "图片已上传",
+          description: `${type === 'front' ? '正面' : '背面'}图片已上传（未处理背景）。`,
+          variant: "default"
+        });
+      }
 
       onImagesChange({
         ...deviceImages,
-        [type]: processedFile
-      });
-
-      toast({
-        title: "图片已上传",
-        description: `${type === 'front' ? '正面' : '背面'}图片已自动去除背景。`,
-        variant: "default"
+        [type]: finalFile
       });
     } catch (error) {
       toast({
@@ -129,7 +143,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
 
     setValidating(false);
     setProcessingSide(null);
-  }, [deviceImages, onImagesChange, removeImageBackground]);
+  }, [deviceImages, onImagesChange, removeImageBackground, bgRemovalConfig]);
 
   const handleDrop = useCallback((e: React.DragEvent, type: 'front' | 'back') => {
     e.preventDefault();
@@ -194,7 +208,8 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
               <div className="flex items-center gap-2 text-success">
                 <Check className="h-4 w-4" />
                 <span className="text-sm font-medium">
-                  {type === 'front' ? '正面' : '背面'}模型图已上传（已去背景）
+                  {type === 'front' ? '正面' : '背面'}模型图已上传
+                  {bgRemovalConfig.enabled ? '（已去背景）' : '（原图）'}
                 </span>
               </div>
             </div>
@@ -218,7 +233,11 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
               </p>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <span>上传后将自动去除背景</span>
+                <span>
+                  {bgRemovalConfig.enabled
+                    ? `上传后将自动去除背景（${bgRemovalConfig.useWebGPU ? 'GPU加速' : 'CPU模式'}）`
+                    : '上传后直接使用原图'}
+                </span>
               </div>
               <input
                 type="file"

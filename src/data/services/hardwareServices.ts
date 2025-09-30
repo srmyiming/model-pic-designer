@@ -17,7 +17,10 @@ export const hardwareServices: RepairService[] = [
     useModelSide: 'front',  // 右边使用正面模型图
     layout: {
       type: 'side-by-side',
-      leftHeightRatio: 0.35,  // 充电口缩小到35%高度
+      // 左列固定规则：配件宽度=画布38%，左边距=画布10%
+      leftWidthCanvasRatio: 0.38,
+      leftCanvasOffsetRatioX: 0.10,
+      rightHeightRatio: 0.80,
       badges: [
         { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
         { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.62 },
@@ -37,7 +40,9 @@ export const hardwareServices: RepairService[] = [
     useModelSide: 'front',
     layout: {
       type: 'side-by-side',
-      leftHeightRatio: 0.35,  // 电池缩放到画布高度的 35%
+      leftWidthCanvasRatio: 0.38,
+      leftCanvasOffsetRatioX: 0.10,
+      rightHeightRatio: 0.80,
       badges: [
         { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
         { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.62 },

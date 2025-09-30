@@ -5,8 +5,9 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ServiceSelector } from '@/components/ServiceSelector';
 import { ProcessingPreview } from '@/components/ProcessingPreview';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
-import { DeviceImages, ServiceSelection, PhoneBrand } from '@/types/repair';
+import { DeviceImages, ServiceSelection, PhoneBrand, BackgroundRemovalConfig } from '@/types/repair';
 import { PhoneBrandSelector } from '@/components/PhoneBrandSelector';
+import { BackgroundRemovalSettings } from '@/components/BackgroundRemovalSettings';
 import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download, X } from 'lucide-react';
 import { ALL_SERVICES } from '@/data/services';
 import {
@@ -30,6 +31,10 @@ const Index = () => {
   const [showSkuDialog, setShowSkuDialog] = useState(false);
   const [sku, setSku] = useState('');
   const [showSkuOnImage, setShowSkuOnImage] = useState(true);
+  const [bgRemovalConfig, setBgRemovalConfig] = useState<BackgroundRemovalConfig>({
+    enabled: true,    // 默认开启（保持现有行为）
+    useWebGPU: false, // 默认关闭（保守策略）
+  });
 
   const {
     processedImages,
@@ -194,9 +199,14 @@ const Index = () => {
         return (
           <>
             <PhoneBrandSelector value={phoneBrand} onChange={setPhoneBrand} />
+            <BackgroundRemovalSettings
+              config={bgRemovalConfig}
+              onChange={setBgRemovalConfig}
+            />
             <ImageUploader
               deviceImages={deviceImages}
               onImagesChange={setDeviceImages}
+              bgRemovalConfig={bgRemovalConfig}
             />
           </>
         );

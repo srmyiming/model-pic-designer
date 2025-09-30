@@ -173,6 +173,36 @@ const denormalizeBounds = (bounds: NormalizedBounds, width: number, height: numb
   height: bounds.height * height,
 });
 
+// Detect alpha bounds from any drawable (Image or Canvas)
+const detectDrawableBounds = (drawable: HTMLCanvasElement | HTMLImageElement, alphaThreshold = 2): ContentBounds | null => {
+  const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+  const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+  if (sw === 0 || sh === 0) return null;
+
+  const tmp = document.createElement('canvas');
+  tmp.width = sw;
+  tmp.height = sh;
+  const c = tmp.getContext('2d');
+  if (!c) return null;
+  c.drawImage(drawable, 0, 0, sw, sh);
+  const { data } = c.getImageData(0, 0, sw, sh);
+
+  let minX = sw, minY = sh, maxX = -1, maxY = -1;
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const a = data[(y * sw + x) * 4 + 3];
+      if (a > alphaThreshold) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX === -1 || maxY === -1) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+};
+
 const mergeNormalizedBounds = (a: NormalizedBounds, b: NormalizedBounds): NormalizedBounds => {
   const minX = Math.min(a.x, b.x);
   const minY = Math.min(a.y, b.y);
@@ -748,6 +778,49 @@ const composeFinalLayout = async (
     (ctx as any).filter = prev || 'none';
   };
 
+  // Draw left-side part by absolute target width and left offset (in canvas coordinates),
+  // while clamping into the left column region.
+  const drawDrawableByWidth = (
+    drawable: HTMLCanvasElement | HTMLImageElement,
+    regionX: number,
+    regionWidth: number,
+    targetWidth: number,
+    desiredCanvasDx: number,
+  ) => {
+    const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+    const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+    if (sw === 0 || sh === 0) return;
+
+    const bounds = detectDrawableBounds(drawable) ?? { x: 0, y: 0, width: sw, height: sh };
+
+    const scaleW = targetWidth / bounds.width;
+    const scaledW = targetWidth;
+    const scaledH = bounds.height * scaleW;
+
+    (ctx as any).imageSmoothingEnabled = true;
+    try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
+    const prev = (ctx as any).filter ?? 'none';
+    (ctx as any).filter = 'blur(0.15px)';
+
+    const minX = regionX;
+    const maxX = regionX + regionWidth - scaledW;
+    const dx = Math.max(minX, Math.min(maxX, desiredCanvasDx));
+
+    if (scaledH <= OUTPUT_SIZE) {
+      const dy = (OUTPUT_SIZE - scaledH) / 2;
+      ctx.drawImage(drawable, bounds.x, bounds.y, bounds.width, bounds.height, dx, dy, scaledW, scaledH);
+    } else {
+      // Crop vertically to fit canvas
+      const ratio = OUTPUT_SIZE / scaledH;
+      const cropH = bounds.height * ratio;
+      const sy = bounds.y + (bounds.height - cropH) / 2;
+      const dy = 0;
+      ctx.drawImage(drawable, bounds.x, sy, bounds.width, cropH, dx, dy, scaledW, OUTPUT_SIZE);
+    }
+
+    (ctx as any).filter = prev || 'none';
+  };
+
   if (service.layout.type === 'single-centered') {
     const targetH = Math.floor(OUTPUT_SIZE * ((service.layout as any).targetHeightRatio ?? 0.8));
     drawDrawable(baseCanvas, 0, OUTPUT_SIZE, targetH);
@@ -779,10 +852,21 @@ const composeFinalLayout = async (
   // side-by-side (默认并排布局)
   const dividerWidth = 0;
   const columnWidth = OUTPUT_SIZE / 2;
-  const leftHeightRatio = (service.layout as any).leftHeightRatio ?? 0.80;
-  const leftTargetHeight = Math.floor(OUTPUT_SIZE * leftHeightRatio);
-  const rightTargetHeight = Math.floor(OUTPUT_SIZE * 0.80); // 右边固定80%
-  drawDrawable(baseCanvas, 0, columnWidth, leftTargetHeight);
+  const sLayout: any = service.layout as any;
+  const rightTargetHeight = Math.floor(OUTPUT_SIZE * (sLayout.rightHeightRatio ?? 0.80));
+
+  // 左侧：若为配件类，优先使用“按画布宽度 + 左边距”的摆放规则
+  if (service.needsPartImage) {
+    const widthCanvasRatio = Math.max(0.05, Math.min(1, sLayout.leftWidthCanvasRatio ?? 0.38));
+    const offsetCanvasRatio = Math.max(0, Math.min(1, sLayout.leftCanvasOffsetRatioX ?? 0.10));
+    const targetW = Math.floor(OUTPUT_SIZE * widthCanvasRatio);
+    const desiredDx = Math.floor(OUTPUT_SIZE * offsetCanvasRatio);
+    drawDrawableByWidth(baseCanvas, 0, columnWidth, targetW, desiredDx);
+  } else {
+    const leftHeightRatio = Math.max(0.05, Math.min(1, sLayout.leftHeightRatio ?? 0.80));
+    const leftTargetHeight = Math.floor(OUTPUT_SIZE * leftHeightRatio);
+    drawDrawable(baseCanvas, 0, columnWidth, leftTargetHeight);
+  }
 
   try {
     const originalImage = await loadImageFromFile(originalFile);

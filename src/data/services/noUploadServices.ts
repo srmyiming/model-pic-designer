@@ -101,7 +101,20 @@ export const noUploadServices: RepairService[] = [
     category: 'protection',
     thumbnail: '/service-previews/Protector Hidrogel para....jpg',
     needsPartImage: false,
-    useModelSide: 'front'
+    useModelSide: 'front',
+    centerOverlayImage: '/assets/parts/screen-protector-hydrogel.png',
+    centerOverlayRatio: 1.0,
+    layout: {
+      type: 'single-centered',
+      targetHeightRatio: 0.80,
+      // 镜像钢化膜：让组合整体微微向左，方便右侧露出更多机身
+      centerOffsetRatioX: -0.03,
+      edgeBadges: [
+        { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.86, side: 'left' },
+        { src: '/assets/badges/logo1.png', widthRatio: 0.07, yRatio: 0.86, side: 'right' },
+      ],
+    },
+    implemented: true
   },
   {
     id: 'no-power',

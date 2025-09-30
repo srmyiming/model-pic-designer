@@ -38,6 +38,14 @@ export interface SideBySideLayoutConfig {
   dividerColor?: string;        // 中缝分隔线颜色
   dividerWidthRatio?: number;   // 中缝分隔线宽度比例（0~1）
   leftHeightRatio?: number;     // 左侧图片目标高度比例（0~1，默认0.80）
+  // 新增：左侧配件可按“固定宽度”缩放，适合小配件（电池/接口等）。
+  // 默认为按高度缩放；当为 'width' 时使用 leftWidthRatio 作为目标宽度比例。
+  leftScaleMode?: 'height' | 'width';
+  leftWidthRatio?: number;      // 左侧目标宽度占“列宽”的比例（0~1，默认 0.52）
+  rightHeightRatio?: number;    // 右侧目标高度比例（0~1，默认0.80）
+  // 绝对（相对画布）的宽度与偏移，优先于 leftWidthRatio，用于配件类的统一规格。
+  leftWidthCanvasRatio?: number;   // 左侧目标宽度占画布宽度比例（0~1，建议 0.38）
+  leftCanvasOffsetRatioX?: number; // 左边距占画布宽度比例（0~1，建议 0.10）
   badges?: {
     src: string;          // 徽标图片（public 路径）
     widthRatio: number;   // 徽标宽度相对画布宽度比例（0~1）
@@ -121,6 +129,15 @@ export interface ProcessedImage {
 }
 
 export type PhoneBrand = 'generic' | 'apple' | 'samsung' | 'xiaomi';
+
+/**
+ * BackgroundRemovalConfig
+ * 背景移除配置，用于控制图片上传时的背景移除行为
+ */
+export interface BackgroundRemovalConfig {
+  enabled: boolean;    // 是否启用背景移除
+  useWebGPU: boolean;  // 是否启用 WebGPU 加速（需要浏览器支持）
+}
 
 /**
  * @deprecated
