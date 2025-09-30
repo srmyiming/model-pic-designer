@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Upload, X, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, Check, AlertCircle } from 'lucide-react';
 import { DeviceImages } from '@/types/repair';
 import { toast } from '@/hooks/use-toast';
 import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
@@ -156,22 +155,22 @@ export const ImageUploader = ({ deviceImages, onImagesChange }: ImageUploaderPro
     const isProcessingThis = isProcessing && processingSide === type;
 
     return (
-      <Card className={`relative transition-all duration-300 ${
+      <Card className={`relative transition-all duration-300 overflow-hidden ${
         dragOver === type ? 'ring-2 ring-primary shadow-glow' : ''
       } ${file ? 'border-success' : 'border-dashed border-2'}`}>
         <CardContent className="p-6">
           {isProcessingThis ? (
-            <div className="space-y-4 py-8">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 text-primary animate-spin" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-semibold mb-2">正在处理图片</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  自动去除背景中，请稍候...
-                </p>
-                <Progress value={progress} className="w-full" />
-                <p className="text-xs text-muted-foreground mt-2">{progress}%</p>
+            <div className="relative h-60 flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <img
+                  src="/assets/ui/loading.gif"
+                  alt="loading"
+                  className="block mx-auto h-12 w-12 md:h-16 md:w-16 object-contain"
+                />
+                <div className="text-center">
+                  <h3 className="font-semibold mb-1">正在处理图片</h3>
+                  <p className="text-sm text-muted-foreground">自动去除背景中，请稍候...</p>
+                </div>
               </div>
             </div>
           ) : file ? (

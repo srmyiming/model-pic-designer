@@ -15,23 +15,24 @@ export const noUploadServices: RepairService[] = [
     needsPartImage: false,
     useModelSide: 'front',
     overlayArea: {
-      x: -0.02,     // Extend slightly to ensure bezel coverage
-      y: -0.02,
-      width: 1.04,
-      height: 1.04
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1
     },
-    overlayImage: '/cracked-screen.png',
+    overlayImage: '/assets/overlays/cracked-screen.png',
     crackPoints: [
-      { x: 0.35, y: 0.25, size: 0.4 },  // Top crack
-      { x: 0.50, y: 0.50, size: 0.4 },  // Middle crack
-      { x: 0.40, y: 0.75, size: 0.4 }   // Bottom crack
+      { x: 0.33, y: 0.22, size: 0.62 },  // Top crack
+      { x: 0.52, y: 0.50, size: 0.62 },  // Middle crack (same size)
+      { x: 0.40, y: 0.78, size: 0.62 }   // Bottom crack (same size)
     ],
     fillColor: '#000000',
     layout: {
       type: 'side-by-side',
       dividerColor: '#0f172a',
-      dividerWidthRatio: 0.035,
-    }
+      dividerWidthRatio: 0,
+    },
+    implemented: true
   },
   {
     id: 'back-cover',
@@ -41,7 +42,25 @@ export const noUploadServices: RepairService[] = [
     category: 'hardware',
     thumbnail: '/service-previews/Cambiar Tapa Trasera Xiaomi....jpg',
     needsPartImage: false,
-    useModelSide: 'back'
+    useModelSide: 'back',
+    overlayArea: {
+      x: 0.02,
+      y: 0.02,
+      width: 0.96,
+      height: 0.96,
+    },
+    overlayImage: '/assets/overlays/cracked-screen.png',
+    crackPoints: [
+      { x: 0.35, y: 0.28, size: 0.55 },
+      { x: 0.62, y: 0.52, size: 0.58 },
+      { x: 0.38, y: 0.75, size: 0.54 },
+    ],
+    layout: {
+      type: 'side-by-side',
+      dividerColor: '#0f172a',
+      dividerWidthRatio: 0,
+    },
+    implemented: true,
   },
   {
     id: 'screen-protector-glass',

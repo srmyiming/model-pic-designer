@@ -53,9 +53,11 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
 
     const newSelections: Record<string, ServiceSelection> = {};
     ALL_SERVICES.forEach(service => {
+      // Only select/deselect implemented services
+      const isImplemented = service.implemented === true;
       newSelections[service.id] = {
         serviceId: service.id,
-        isSelected: newSelectAll,
+        isSelected: isImplemented ? newSelectAll : false,
         customImage: selections[service.id]?.customImage,
       };
     });
@@ -80,13 +82,16 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
   const ServiceCard = ({ service, index }: { service: RepairService; index: number }) => {
     const isSelected = selections[service.id]?.isSelected || false;
     const hasCustomImage = selections[service.id]?.customImage;
+    const isImplemented = service.implemented === true; // Only true if explicitly set
 
     return (
       <Card
-        className={`transition-all duration-200 cursor-pointer hover:shadow-md ${
+        className={`transition-all duration-200 ${
+          isImplemented ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed'
+        } ${
           isSelected ? 'ring-2 ring-primary border-primary' : 'hover:border-primary/50'
         }`}
-        onClick={() => handleServiceToggle(service)}
+        onClick={() => isImplemented && handleServiceToggle(service)}
       >
         <CardContent className="p-2">
           <div className="space-y-1.5">
@@ -95,11 +100,22 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
               <img
                 src={service.thumbnail}
                 alt={service.titleCN}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${!isImplemented ? 'grayscale opacity-50' : ''}`}
               />
+
+              {/* 未实现蒙层 */}
+              {!isImplemented && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <span className="text-white text-xs font-semibold bg-black/80 px-2 py-1 rounded">
+                    未实现
+                  </span>
+                </div>
+              )}
+
               <div className="absolute top-1 left-1">
                 <Checkbox
                   checked={isSelected}
+                  disabled={!isImplemented}
                   className="bg-white shadow-sm h-4 w-4 pointer-events-none"
                 />
               </div>
@@ -141,6 +157,7 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
                     size="sm"
                     className="w-full text-[10px] h-6 px-2"
                     asChild
+                    disabled={!isImplemented}
                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   >
                     <label htmlFor={`service-${service.id}`} className="cursor-pointer">

@@ -5,7 +5,8 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ServiceSelector } from '@/components/ServiceSelector';
 import { ProcessingPreview } from '@/components/ProcessingPreview';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
-import { DeviceImages, ServiceSelection } from '@/types/repair';
+import { DeviceImages, ServiceSelection, PhoneBrand } from '@/types/repair';
+import { PhoneBrandSelector } from '@/components/PhoneBrandSelector';
 import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download, X } from 'lucide-react';
 import {
   Dialog,
@@ -24,6 +25,7 @@ const Index = () => {
     back: null,
   });
   const [selections, setSelections] = useState<Record<string, ServiceSelection>>({});
+  const [phoneBrand, setPhoneBrand] = useState<PhoneBrand | null>(null);
   const [showSkuDialog, setShowSkuDialog] = useState(false);
   const [sku, setSku] = useState('');
 
@@ -44,7 +46,8 @@ const Index = () => {
   const canProceedToStep = (step: number) => {
     switch (step) {
       case 1:
-        return true; // Allow proceeding to service selection without images
+        // Require phone brand selection before entering step 2 (service selection)
+        return phoneBrand !== null;
       case 2:
         return Object.values(selections).some(s => s.isSelected);
       default:
@@ -81,6 +84,35 @@ const Index = () => {
   };
 
   const stepProgress = ((currentStep + 1) / steps.length) * 100;
+
+  const StickyNav = () => (
+    <div className="fixed bottom-0 inset-x-0 z-50">
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="rounded-t-xl border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-lg px-4 py-3 flex items-center justify-between">
+          <Button
+            variant="outline"
+            onClick={handlePrev}
+            disabled={currentStep === 0}
+            className="flex items-center gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            上一步
+          </Button>
+          <div className="text-xs text-muted-foreground hidden sm:block">
+            进度 {Math.round(stepProgress)}%
+          </div>
+          <Button
+            onClick={handleNext}
+            disabled={currentStep === steps.length - 1 || !canProceedToStep(currentStep + 1)}
+            className="flex items-center gap-2"
+          >
+            {currentStep === steps.length - 1 ? '完成' : '下一步'}
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 
   const StepIndicator = () => (
     <div className="mb-8">
@@ -143,10 +175,13 @@ const Index = () => {
     switch (currentStep) {
       case 0:
         return (
-          <ImageUploader
-            deviceImages={deviceImages}
-            onImagesChange={setDeviceImages}
-          />
+          <>
+            <PhoneBrandSelector value={phoneBrand} onChange={setPhoneBrand} />
+            <ImageUploader
+              deviceImages={deviceImages}
+              onImagesChange={setDeviceImages}
+            />
+          </>
         );
       case 1:
         return (
@@ -172,22 +207,22 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 pb-24">
+      <div className="container mx-auto px-4 py-4">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-12">
-            <div className="flex justify-center mb-6">
+          <div className="text-center mb-6">
+            <div className="flex justify-center mb-3">
               <img
-                src="/logo.jpg"
+                src="/assets/branding/logo.jpg"
                 alt="Reparacionmovil Logo"
-                className="h-16 md:h-20 object-contain"
+                className="h-12 md:h-14 object-contain"
               />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-4">
+            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-2">
               电商产品图片生成器
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
               上传手机模型图，选择产品类目，自动生成专业的电商展示图
             </p>
           </div>
@@ -196,31 +231,11 @@ const Index = () => {
           <StepIndicator />
 
           {/* Main Content */}
-          <div className="bg-card rounded-2xl shadow-elegant p-8 mb-8">
+          <div className="bg-card rounded-2xl shadow-elegant p-4 md:p-6 mb-4">
             {renderStepContent()}
           </div>
 
-          {/* Navigation */}
-          <div className="flex justify-between">
-            <Button
-              variant="outline"
-              onClick={handlePrev}
-              disabled={currentStep === 0}
-              className="flex items-center gap-2"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              上一步
-            </Button>
-            
-            <Button
-              onClick={handleNext}
-              disabled={currentStep === steps.length - 1 || !canProceedToStep(currentStep + 1)}
-              className="flex items-center gap-2"
-            >
-              {currentStep === steps.length - 1 ? '完成' : '下一步'}
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* Navigation moved to sticky footer */}
         </div>
       </div>
 
@@ -256,6 +271,7 @@ const Index = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <StickyNav />
     </div>
   );
 };

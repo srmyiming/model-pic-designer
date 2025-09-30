@@ -33,6 +33,7 @@ export interface RepairService {
   crackPoints?: CrackPoint[];    // Multiple crack positions
   fillColor?: string;            // Background fill color for screen area
   layout?: ServiceLayout;        // Final composition layout configuration
+  implemented?: boolean;         // Whether service is implemented (default: false)
 }
 
 export interface DeviceImages {
@@ -52,6 +53,8 @@ export interface ProcessedImage {
   processedImage: string;
   approved: boolean;
 }
+
+export type PhoneBrand = 'generic' | 'apple' | 'samsung' | 'xiaomi';
 
 /**
  * @deprecated

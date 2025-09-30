@@ -24,6 +24,71 @@ const canvasToObjectUrl = (canvas: HTMLCanvasElement): Promise<string> => {
   });
 };
 
+// Feather the alpha channel inside a ROI with a tiny blur and a slight boost.
+// This preserves soft edges while sealing tiny pinholes from imperfect cutouts.
+const featherAlpha = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number = 1,
+  boost: number = 1.05
+) => {
+  if (w <= 0 || h <= 0) return;
+  const img = ctx.getImageData(x, y, w, h);
+  const data = img.data;
+
+  const src = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) src[i] = data[i * 4 + 3];
+
+  // Separable box blur on alpha channel
+  const tmp = new Float32Array(w * h);
+  const dst = new Float32Array(w * h);
+  const win = radius * 2 + 1;
+  const norm = 1 / win;
+
+  // Horizontal pass (sliding window)
+  for (let yy = 0; yy < h; yy++) {
+    let acc = 0;
+    let base = yy * w;
+    for (let k = -radius; k <= radius; k++) {
+      const xx = Math.min(w - 1, Math.max(0, k));
+      acc += src[base + xx];
+    }
+    for (let xx = 0; xx < w; xx++) {
+      tmp[base + xx] = acc * norm;
+      const xOut = xx - radius;
+      const xIn = xx + radius + 1;
+      acc -= src[base + (xOut >= 0 ? xOut : 0)];
+      acc += src[base + (xIn < w ? xIn : w - 1)];
+    }
+  }
+
+  // Vertical pass (sliding window)
+  for (let xx = 0; xx < w; xx++) {
+    let acc = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const yy = Math.min(h - 1, Math.max(0, k));
+      acc += tmp[yy * w + xx];
+    }
+    for (let yy = 0; yy < h; yy++) {
+      dst[yy * w + xx] = acc * norm;
+      const yOut = yy - radius;
+      const yIn = yy + radius + 1;
+      acc -= tmp[(yOut >= 0 ? yOut : 0) * w + xx];
+      acc += tmp[(yIn < h ? yIn : h - 1) * w + xx];
+    }
+  }
+
+  for (let i = 0; i < w * h; i++) {
+    const a = Math.min(255, Math.max(0, Math.round(dst[i] * boost)));
+    data[i * 4 + 3] = a;
+  }
+
+  ctx.putImageData(img, x, y);
+};
+
 const detectContentBounds = (img: HTMLImageElement): ContentBounds | null => {
   const width = img.naturalWidth || img.width;
   const height = img.naturalHeight || img.height;
@@ -89,12 +154,6 @@ const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanva
     }
 
     const finalize = () => {
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-over';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-      ctx.restore();
-
       URL.revokeObjectURL(objectUrl);
       resolve(canvas);
     };
@@ -115,9 +174,24 @@ const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanva
       const offsetX = (OUTPUT_SIZE - scaledWidth) / 2;
       const offsetY = (OUTPUT_SIZE - scaledHeight) / 2;
 
+      // High-quality draw + slight blur to minimize aliasing
+      (ctx as any).imageSmoothingEnabled = true;
+      try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
+      const prevFilterImg = (ctx as any).filter ?? 'none';
+      (ctx as any).filter = 'blur(0.2px)';
       ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+      (ctx as any).filter = prevFilterImg || 'none';
 
-      if (service.overlayArea && service.fillColor) {
+      // Feather the alpha to seal tiny holes without hardening edges
+      try {
+        const ix = Math.max(0, Math.floor(offsetX));
+        const iy = Math.max(0, Math.floor(offsetY));
+        const iw = Math.min(OUTPUT_SIZE - ix, Math.ceil(scaledWidth));
+        const ih = Math.min(OUTPUT_SIZE - iy, Math.ceil(scaledHeight));
+        featherAlpha(ctx, ix, iy, iw, ih, 1, 1.06);
+      } catch {}
+
+      if (service.overlayArea) {
         const bounds = detectContentBounds(img) ?? {
           x: 0,
           y: 0,
@@ -131,15 +205,18 @@ const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanva
         const screenWidth = bounds.width * overlay.width * scale;
         const screenHeight = bounds.height * overlay.height * scale;
 
+        // Clip to the overlay area
         ctx.save();
         ctx.beginPath();
         ctx.rect(screenX, screenY, screenWidth, screenHeight);
         ctx.clip();
 
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.fillStyle = service.fillColor;
-        ctx.fillRect(screenX - screenWidth, screenY - screenHeight, screenWidth * 3, screenHeight * 3);
-        ctx.globalCompositeOperation = 'source-over';
+        if (service.fillColor) {
+          ctx.globalCompositeOperation = 'source-atop';
+          ctx.fillStyle = service.fillColor;
+          ctx.fillRect(screenX - screenWidth, screenY - screenHeight, screenWidth * 3, screenHeight * 3);
+          ctx.globalCompositeOperation = 'source-over';
+        }
 
         const finishWithRestore = () => {
           ctx.restore();
@@ -150,10 +227,26 @@ const renderBaseCanvas = (file: File, service: RepairService): Promise<HTMLCanva
           const crackImg = new Image();
           crackImg.onload = () => {
             service.crackPoints!.forEach(crack => {
-              const crackSize = screenWidth * crack.size;
-              const crackX = screenX + (screenWidth * crack.x) - crackSize / 2;
-              const crackY = screenY + (screenHeight * crack.y) - crackSize / 2;
-              ctx.drawImage(crackImg, crackX, crackY, crackSize, crackSize);
+              const crackSize = screenWidth * crack.size; // size relative to screen width
+              const centerX = screenX + (screenWidth * crack.x);
+              const centerY = screenY + (screenHeight * crack.y);
+              const drawX = centerX - crackSize / 2;
+              const drawY = centerY - crackSize / 2;
+
+              // Clip to a circle to avoid any white halo in the PNG edges
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(centerX, centerY, crackSize * 0.52, 0, Math.PI * 2);
+              ctx.clip();
+              // High-quality sampling + micro blur to smooth jaggies
+              // Note: filter must be set before drawImage
+              const prevFilter = (ctx as any).filter ?? 'none';
+              (ctx as any).imageSmoothingEnabled = true;
+              try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
+              (ctx as any).filter = 'blur(0.3px)';
+              ctx.drawImage(crackImg, drawX, drawY, crackSize, crackSize);
+              (ctx as any).filter = prevFilter || 'none';
+              ctx.restore();
             });
             finishWithRestore();
           };
@@ -214,33 +307,87 @@ const composeFinalLayout = async (
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-  const dividerWidth = Math.max(2, Math.round(OUTPUT_SIZE * (service.layout.dividerWidthRatio ?? 0.04)));
-  const dividerColor = service.layout.dividerColor ?? '#111111';
-  const columnWidth = (OUTPUT_SIZE - dividerWidth) / 2;
+  // Remove center divider per user request
+  const dividerWidth = 0;
+  const columnWidth = OUTPUT_SIZE / 2;
+
+  const targetHeight = Math.floor(OUTPUT_SIZE * 0.80); // target ~80% of canvas height
+
+  // Utility to compute tight alpha bounds of a drawable
+  const getBounds = (drawable: HTMLCanvasElement | HTMLImageElement): ContentBounds => {
+    const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+    const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+    const temp = document.createElement('canvas');
+    temp.width = sw; temp.height = sh;
+    const tctx = temp.getContext('2d');
+    if (!tctx) return { x: 0, y: 0, width: sw, height: sh };
+    tctx.clearRect(0,0,sw,sh);
+    tctx.drawImage(drawable as any, 0, 0, sw, sh);
+    try {
+      const id = tctx.getImageData(0,0,sw,sh);
+      const data = id.data;
+      let minX = sw, minY = sh, maxX = -1, maxY = -1;
+      for (let y = 0; y < sh; y++) {
+        for (let x = 0; x < sw; x++) {
+          const a = data[(y*sw + x)*4 + 3];
+          if (a > 10) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX === -1 || maxY === -1) return { x: 0, y: 0, width: sw, height: sh };
+      return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+    } catch {
+      return { x: 0, y: 0, width: sw, height: sh };
+    }
+  };
 
   const drawDrawable = (drawable: HTMLCanvasElement | HTMLImageElement, startX: number) => {
-    const sourceWidth = drawable instanceof HTMLImageElement
-      ? drawable.naturalWidth || drawable.width
+    const sw = drawable instanceof HTMLImageElement
+      ? (drawable.naturalWidth || drawable.width)
       : drawable.width;
-    const sourceHeight = drawable instanceof HTMLImageElement
-      ? drawable.naturalHeight || drawable.height
+    const sh = drawable instanceof HTMLImageElement
+      ? (drawable.naturalHeight || drawable.height)
       : drawable.height;
+    if (sw === 0 || sh === 0) return;
 
-    if (sourceWidth === 0 || sourceHeight === 0) return;
+    // Tight alpha bounds -> unify content box across inputs
+    const b = getBounds(drawable);
 
-    const scale = Math.min(columnWidth / sourceWidth, OUTPUT_SIZE / sourceHeight);
-    const targetWidth = sourceWidth * scale;
-    const targetHeight = sourceHeight * scale;
-    const drawX = startX + (columnWidth - targetWidth) / 2;
-    const drawY = (OUTPUT_SIZE - targetHeight) / 2;
+    // Height-only scaling to enforce identical visual height
+    const scaleH = targetHeight / b.height;
+    const scaledW = b.width * scaleH;
+    const scaledH = targetHeight; // always
 
-    ctx.drawImage(drawable, drawX, drawY, targetWidth, targetHeight);
+    // High quality sampling for layout stage
+    (ctx as any).imageSmoothingEnabled = true;
+    try { (ctx as any).imageSmoothingQuality = 'high'; } catch {}
+    const prev = (ctx as any).filter ?? 'none';
+    (ctx as any).filter = 'blur(0.15px)';
+
+    if (scaledW <= columnWidth) {
+      // No overflow: center horizontally
+      const dx = startX + (columnWidth - scaledW) / 2;
+      const dy = (OUTPUT_SIZE - scaledH) / 2;
+      ctx.drawImage(drawable, b.x, b.y, b.width, b.height, dx, dy, scaledW, scaledH);
+    } else {
+      // Overflow horizontally: crop source around center to fit column width
+      const ratio = columnWidth / scaledW; // < 1
+      const cropW = b.width * ratio; // source crop width
+      const sx = b.x + (b.width - cropW) / 2;
+      const sy = b.y;
+      const dx = startX; // fill full column
+      const dy = (OUTPUT_SIZE - scaledH) / 2;
+      ctx.drawImage(drawable, sx, sy, cropW, b.height, dx, dy, columnWidth, scaledH);
+    }
+
+    (ctx as any).filter = prev || 'none';
   };
 
   drawDrawable(baseCanvas, 0);
-
-  ctx.fillStyle = dividerColor;
-  ctx.fillRect(columnWidth, 0, dividerWidth, OUTPUT_SIZE);
 
   try {
     const originalImage = await loadImageFromFile(originalFile);
