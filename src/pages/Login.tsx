@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { saveSession } from '@/utils/auth';
 
 interface LoginProps {
   onLogin: () => void;
@@ -19,7 +20,7 @@ export const Login = ({ onLogin }: LoginProps) => {
 
     if (password === correctPassword) {
       if (rememberMe) {
-        localStorage.setItem('isLoggedIn', 'true');
+        saveSession(); // 保存会话,有效期 7 天
       }
       onLogin();
     } else {

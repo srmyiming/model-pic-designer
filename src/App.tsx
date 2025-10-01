@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { Login } from "./pages/Login";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { isSessionValid } from "@/utils/auth";
 
 const queryClient = new QueryClient();
 
@@ -15,9 +17,8 @@ const App = () => {
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const savedLogin = localStorage.getItem('isLoggedIn');
-    if (savedLogin === 'true') {
+    // 检查会话是否有效 (包含过期验证)
+    if (isSessionValid()) {
       setIsLoggedIn(true);
     }
     setIsChecking(false);
@@ -47,19 +48,24 @@ const App = () => {
 
   // Show main app if logged in
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary
+      fallbackTitle="应用程序错误"
+      fallbackMessage="抱歉,应用遇到了一些问题。请尝试重新加载页面。"
+    >
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

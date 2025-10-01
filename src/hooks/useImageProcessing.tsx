@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { ProcessedImage, ServiceSelection, DeviceImages, RepairService } from '@/types/repair';
 import { toast } from '@/hooks/use-toast';
 import { ALL_SERVICES } from '@/data/services';
+import { useObjectURLs } from '@/hooks/useObjectURLs';
 
 const OUTPUT_SIZE = 800;
 
@@ -19,11 +20,14 @@ interface NormalizedBounds {
   height: number;
 }
 
-const canvasToObjectUrl = (canvas: HTMLCanvasElement): Promise<string> => {
+const canvasToObjectUrl = (
+  canvas: HTMLCanvasElement,
+  createURL: (blob: Blob) => string
+): Promise<string> => {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
       if (blob) {
-        resolve(URL.createObjectURL(blob));
+        resolve(createURL(blob));
       } else {
         resolve(canvas.toDataURL('image/png'));
       }
@@ -434,11 +438,12 @@ const composeFinalLayout = async (
   baseCanvas: HTMLCanvasElement,
   originalFile: File,
   normalizedBounds: NormalizedBounds | null,
+  createURL: (blob: Blob) => string,
   sku?: string,
   showSkuOnImage?: boolean
 ): Promise<string> => {
   if (!service.layout) {
-    return canvasToObjectUrl(baseCanvas);
+    return canvasToObjectUrl(baseCanvas, createURL);
   }
 
   const finalCanvas = document.createElement('canvas');
@@ -447,7 +452,7 @@ const composeFinalLayout = async (
   const ctx = finalCanvas.getContext('2d');
 
   if (!ctx) {
-    return canvasToObjectUrl(baseCanvas);
+    return canvasToObjectUrl(baseCanvas, createURL);
   }
 
   ctx.fillStyle = '#ffffff';
@@ -552,7 +557,7 @@ const composeFinalLayout = async (
 
     const phonePlacement = measureDrawable(baseCanvas);
     if (!phonePlacement) {
-      return canvasToObjectUrl(finalCanvas);
+      return canvasToObjectUrl(finalCanvas, createURL);
     }
 
     const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
@@ -729,7 +734,7 @@ const composeFinalLayout = async (
       drawSkuText(ctx, sku);
     }
 
-    return canvasToObjectUrl(finalCanvas);
+    return canvasToObjectUrl(finalCanvas, createURL);
   }
 
   const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
@@ -846,7 +851,7 @@ const composeFinalLayout = async (
       drawSkuText(ctx, sku);
     }
 
-    return canvasToObjectUrl(finalCanvas);
+    return canvasToObjectUrl(finalCanvas, createURL);
   }
 
   // side-by-side (默认并排布局)
@@ -926,13 +931,14 @@ const composeFinalLayout = async (
     drawSkuText(ctx, sku);
   }
 
-  return canvasToObjectUrl(finalCanvas);
+  return canvasToObjectUrl(finalCanvas, createURL);
 };
 
 export const useImageProcessing = () => {
   const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [normalizedBounds, setNormalizedBounds] = useState<NormalizedBounds | null>(null);
+  const { create: createObjectURL, revokeAll } = useObjectURLs();
 
   const processImages = useCallback(async (
     deviceImages: DeviceImages,
@@ -940,6 +946,9 @@ export const useImageProcessing = () => {
     sku?: string,
     showSkuOnImage?: boolean
   ) => {
+    // 清理之前的 ObjectURLs，避免内存泄漏
+    revokeAll();
+
     setIsProcessing(true);
     setProcessedImages([]);
     setNormalizedBounds(null);
@@ -999,7 +1008,7 @@ export const useImageProcessing = () => {
           continue;
         }
 
-        const originalImageUrl = URL.createObjectURL(sourceImage);
+        const originalImageUrl = createObjectURL(sourceImage);
         console.log('✅ Created originalImageUrl:', originalImageUrl, 'for service:', serviceConfig.titleCN);
 
         // Generate base effect and compose final layout using cached device bounds
@@ -1032,6 +1041,7 @@ export const useImageProcessing = () => {
           baseCanvas,
           rightSideFile,
           boundsRef,
+          createObjectURL,
           sku,
           showSkuOnImage
         );
@@ -1073,7 +1083,7 @@ export const useImageProcessing = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, []);
+  }, [createObjectURL, revokeAll]);
 
   const updateImageApproval = useCallback((serviceId: string, approved: boolean) => {
     setProcessedImages(prev => 

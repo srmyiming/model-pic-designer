@@ -5,10 +5,9 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ServiceSelector } from '@/components/ServiceSelector';
 import { ProcessingPreview } from '@/components/ProcessingPreview';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
-import { DeviceImages, ServiceSelection, PhoneBrand, BackgroundRemovalConfig } from '@/types/repair';
-import { PhoneBrandSelector } from '@/components/PhoneBrandSelector';
+import { DeviceImages, ServiceSelection, BackgroundRemovalConfig } from '@/types/repair';
 import { BackgroundRemovalSettings } from '@/components/BackgroundRemovalSettings';
-import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download } from 'lucide-react';
 import { ALL_SERVICES } from '@/data/services';
 import {
   Dialog,
@@ -27,7 +26,6 @@ const Index = () => {
     back: null,
   });
   const [selections, setSelections] = useState<Record<string, ServiceSelection>>({});
-  const [phoneBrand, setPhoneBrand] = useState<PhoneBrand | null>(null);
   const [showSkuDialog, setShowSkuDialog] = useState(false);
   const [sku, setSku] = useState('');
   const [showSkuOnImage, setShowSkuOnImage] = useState(true);
@@ -53,9 +51,6 @@ const Index = () => {
   const canProceedToStep = (step: number) => {
     switch (step) {
       case 1:
-        // Require phone brand selection before entering step 2 (service selection)
-        return phoneBrand !== null;
-      case 2:
         // Check if any service is selected
         const hasSelection = Object.values(selections).some(s => s.isSelected);
         if (!hasSelection) return false;
@@ -198,7 +193,6 @@ const Index = () => {
       case 0:
         return (
           <>
-            <PhoneBrandSelector value={phoneBrand} onChange={setPhoneBrand} />
             <BackgroundRemovalSettings
               config={bgRemovalConfig}
               onChange={setBgRemovalConfig}

@@ -139,9 +139,3 @@ export interface BackgroundRemovalConfig {
   useWebGPU: boolean;  // 是否启用 WebGPU 加速（需要浏览器支持）
 }
 
-/**
- * @deprecated
- * 此常量已废弃，请使用 @/data/services 中的 ALL_SERVICES
- * 保留此导出是为了向后兼容，避免破坏现有代码
- */
-export const REPAIR_SERVICES: RepairService[] = [];
