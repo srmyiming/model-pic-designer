@@ -67,7 +67,7 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
     try {
       toast({
         title: "开始下载 AI 模型",
-        description: `正在下载约 150 MB 的模型文件（${config.useWebGPU ? 'GPU 加速' : 'CPU 模式'}）...`,
+        description: `正在下载约 40 MB 的量化模型（${config.useWebGPU ? 'GPU 加速' : 'CPU 模式'}）...`,
       });
 
       await preloadModel(config.useWebGPU);
@@ -179,7 +179,7 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
                 ) : (
                   <>
                     <Download className="h-4 w-4 mr-2" />
-                    🚀 预加载 AI 模型（可选，约 150 MB）
+                    🚀 预加载 AI 模型（可选，约 40 MB）
                   </>
                 )}
               </Button>
