@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { Login } from "./pages/Login";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { DevTools } from "@/components/DevTools";
 import { isSessionValid } from "@/utils/auth";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,7 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          <DevTools />
         </TooltipProvider>
       </QueryClientProvider>
     </ErrorBoundary>
