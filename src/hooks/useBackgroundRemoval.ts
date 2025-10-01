@@ -63,8 +63,63 @@ export const useBackgroundRemoval = () => {
     }
   }, []);
 
+  const preloadModel = useCallback(async (useWebGPU: boolean = false): Promise<void> => {
+    setState({ isProcessing: true, progress: 0, error: null });
+
+    try {
+      // Check WebGPU support
+      const supportsWebGPU = 'gpu' in navigator;
+      const device = useWebGPU && supportsWebGPU ? 'gpu' : 'cpu';
+
+      console.log(`[Model Preload] Downloading AI model using device: ${device}`);
+
+      // Create a 1x1 transparent PNG to trigger model download
+      // Base64 of a minimal 1x1 transparent PNG
+      const tinyPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const binaryString = atob(tinyPngBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const tinyImageBlob = new Blob([bytes], { type: 'image/png' });
+
+      // Trigger model download by processing tiny image
+      await removeBackground(tinyImageBlob, {
+        model: 'isnet',
+        device: device as 'cpu' | 'gpu',
+        progress: (key, current, total) => {
+          const progressPercent = Math.round((current / total) * 100);
+          setState(prev => ({ ...prev, progress: progressPercent }));
+          console.log(`[Model Preload] ${key}: ${progressPercent}%`);
+        },
+        output: {
+          format: 'image/png',
+          quality: 0.8,
+          type: 'foreground',
+        }
+      });
+
+      console.log('[Model Preload] Model loaded and cached successfully');
+      setState({ isProcessing: false, progress: 100, error: null });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to preload model';
+      console.error('[Model Preload] Error:', errorMessage);
+
+      setState({
+        isProcessing: false,
+        progress: 0,
+        error: useWebGPU && errorMessage.includes('gpu')
+          ? 'WebGPU 预加载失败，请尝试关闭 GPU 加速'
+          : '模型预加载失败'
+      });
+
+      throw error;
+    }
+  }, []);
+
   return {
     removeImageBackground,
+    preloadModel,
     isProcessing: state.isProcessing,
     progress: state.progress,
     error: state.error,

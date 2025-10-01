@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { BackgroundRemovalConfig } from '@/types/repair';
-import { Info, Zap, AlertCircle } from 'lucide-react';
+import { Info, Zap, AlertCircle, Download } from 'lucide-react';
+import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
+import { toast } from '@/hooks/use-toast';
 
 interface BackgroundRemovalSettingsProps {
   config: BackgroundRemovalConfig;
@@ -10,9 +13,12 @@ interface BackgroundRemovalSettingsProps {
 }
 
 const STORAGE_KEY = 'bgRemovalConfig';
+const MODEL_LOADED_KEY = 'bgRemovalModelLoaded';
 
 export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemovalSettingsProps) => {
   const [webGPUSupported, setWebGPUSupported] = useState<boolean | null>(null);
+  const [modelLoaded, setModelLoaded] = useState<boolean>(false);
+  const { preloadModel, isProcessing, progress } = useBackgroundRemoval();
 
   // Check WebGPU support on mount
   useEffect(() => {
@@ -21,6 +27,10 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
       setWebGPUSupported(supported);
     };
     checkWebGPU();
+
+    // Check if model was already loaded in this session
+    const loaded = sessionStorage.getItem(MODEL_LOADED_KEY) === 'true';
+    setModelLoaded(loaded);
   }, []);
 
   // Load config from localStorage on mount
@@ -51,6 +61,32 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
 
   const handleWebGPUChange = (checked: boolean) => {
     onChange({ ...config, useWebGPU: checked });
+  };
+
+  const handlePreloadModel = async () => {
+    try {
+      toast({
+        title: "开始下载 AI 模型",
+        description: `正在下载约 150 MB 的模型文件（${config.useWebGPU ? 'GPU 加速' : 'CPU 模式'}）...`,
+      });
+
+      await preloadModel(config.useWebGPU);
+
+      setModelLoaded(true);
+      sessionStorage.setItem(MODEL_LOADED_KEY, 'true');
+
+      toast({
+        title: "✅ 模型已就绪",
+        description: "现在可以快速处理图片了！模型已缓存到本地。",
+      });
+    } catch (error) {
+      console.error('[Preload] Failed:', error);
+      toast({
+        title: "❌ 预加载失败",
+        description: "上传图片时会自动重试加载模型",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -120,8 +156,43 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
             </div>
           </div>
 
-          {/* Additional info */}
+          {/* Preload Model Button */}
           {config.enabled && (
+            <div className="pt-2 border-t border-blue-100 dark:border-blue-900">
+              <Button
+                onClick={handlePreloadModel}
+                disabled={isProcessing || modelLoaded}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                {isProcessing ? (
+                  <>
+                    <Download className="h-4 w-4 mr-2 animate-bounce" />
+                    下载中... {progress}%
+                  </>
+                ) : modelLoaded ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 text-green-600" />
+                    ✅ 模型已就绪
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    🚀 预加载 AI 模型（可选，约 150 MB）
+                  </>
+                )}
+              </Button>
+              <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                {modelLoaded
+                  ? '模型已缓存，上传图片时可快速处理'
+                  : '提前下载模型可避免首次处理时等待'}
+              </p>
+            </div>
+          )}
+
+          {/* Additional info */}
+          {config.enabled && !isProcessing && (
             <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <p className="text-xs text-blue-900 dark:text-blue-200">
                 💡 <strong>提示：</strong>
