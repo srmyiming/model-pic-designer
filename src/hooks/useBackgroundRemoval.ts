@@ -2,7 +2,8 @@ import { useState, useCallback } from 'react';
 import { removeBackground, Config } from '@imgly/background-removal';
 
 // 环境变量配置：使用量化模型减少体积（40 MB vs 150 MB）
-const MODEL = (import.meta.env.VITE_IMGLY_MODEL as 'isnet-quant' | 'isnet') || 'isnet-quant';
+// 可选模型：isnet (150MB) | isnet_fp16 (80MB) | isnet_quint8 (40MB)
+const MODEL = (import.meta.env.VITE_IMGLY_MODEL as 'isnet' | 'isnet_fp16' | 'isnet_quint8') || 'isnet_quint8';
 const PUBLIC_PATH = import.meta.env.VITE_IMGLY_PUBLIC_PATH || '/vendor/imgly/';
 
 interface BackgroundRemovalState {
