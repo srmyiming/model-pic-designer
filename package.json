@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "mkdir -p public/vendor/imgly && cp -R node_modules/@imgly/background-removal/dist/* public/vendor/imgly/ || echo 'imgly assets copy skipped'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

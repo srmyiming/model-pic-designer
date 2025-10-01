@@ -5,6 +5,7 @@ import { Upload, X, Check, AlertCircle } from 'lucide-react';
 import { DeviceImages, BackgroundRemovalConfig } from '@/types/repair';
 import { toast } from '@/hooks/use-toast';
 import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
+import { useObjectURLs } from '@/hooks/useObjectURLs';
 
 interface ImageUploaderProps {
   deviceImages: DeviceImages;
@@ -18,17 +19,14 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
   const [processingSide, setProcessingSide] = useState<'front' | 'back' | null>(null);
   const { removeImageBackground, isProcessing, progress } = useBackgroundRemoval();
 
-  // Cleanup object URLs when component unmounts or images change
+  // 使用 useObjectURLs 管理预览 URL，避免内存泄漏
+  const { create, revoke, revokeAll } = useObjectURLs();
+  const [previews, setPreviews] = useState<{ front?: string; back?: string }>({});
+
+  // 组件卸载时清理所有 ObjectURL
   useEffect(() => {
-    return () => {
-      if (deviceImages.front) {
-        URL.revokeObjectURL(URL.createObjectURL(deviceImages.front));
-      }
-      if (deviceImages.back) {
-        URL.revokeObjectURL(URL.createObjectURL(deviceImages.back));
-      }
-    };
-  }, [deviceImages]);
+    return () => revokeAll();
+  }, [revokeAll]);
 
   const validateImage = useCallback(async (file: File): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -133,6 +131,14 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
         ...deviceImages,
         [type]: finalFile
       });
+
+      // 创建并管理预览 URL
+      setPreviews(prev => {
+        const oldUrl = prev[type];
+        if (oldUrl) revoke(oldUrl);
+        const newUrl = create(finalFile);
+        return { ...prev, [type]: newUrl };
+      });
     } catch (error) {
       toast({
         title: "错误",
@@ -143,7 +149,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
 
     setValidating(false);
     setProcessingSide(null);
-  }, [deviceImages, onImagesChange, removeImageBackground, bgRemovalConfig]);
+  }, [deviceImages, onImagesChange, removeImageBackground, bgRemovalConfig, create, revoke]);
 
   const handleDrop = useCallback((e: React.DragEvent, type: 'front' | 'back') => {
     e.preventDefault();
@@ -159,11 +165,20 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
   }, []);
 
   const removeImage = useCallback((type: 'front' | 'back') => {
+    // 清理预览 URL
+    setPreviews(prev => {
+      const oldUrl = prev[type];
+      if (oldUrl) revoke(oldUrl);
+      const newPreviews = { ...prev };
+      delete newPreviews[type];
+      return newPreviews;
+    });
+
     onImagesChange({
       ...deviceImages,
       [type]: null
     });
-  }, [deviceImages, onImagesChange]);
+  }, [deviceImages, onImagesChange, revoke]);
 
   const ImageUploadCard = ({ type, file }: { type: 'front' | 'back'; file: File | null }) => {
     const isProcessingThis = isProcessing && processingSide === type;
@@ -191,7 +206,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
             <div className="space-y-4">
               <div className="relative">
                 <img
-                  src={URL.createObjectURL(file)}
+                  src={previews[type] || ''}
                   alt={type === 'front' ? '正面图片' : '背面图片'}
                   className="w-full h-48 object-contain rounded-lg"
                   style={{ backgroundColor: '#f0f0f0' }}

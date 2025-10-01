@@ -1,5 +1,9 @@
 import { useState, useCallback } from 'react';
-import { removeBackground } from '@imgly/background-removal';
+import { removeBackground, Config } from '@imgly/background-removal';
+
+// 环境变量配置：使用量化模型减少体积（40 MB vs 150 MB）
+const MODEL = (import.meta.env.VITE_IMGLY_MODEL as 'isnet-quant' | 'isnet') || 'isnet-quant';
+const PUBLIC_PATH = import.meta.env.VITE_IMGLY_PUBLIC_PATH || '/vendor/imgly/';
 
 interface BackgroundRemovalState {
   isProcessing: boolean;
@@ -20,18 +24,12 @@ export const useBackgroundRemoval = () => {
   ): Promise<Blob | null> => {
     setState({ isProcessing: true, progress: 0, error: null });
 
-    try {
-      // Check WebGPU support
-      const supportsWebGPU = 'gpu' in navigator;
-      const device = useWebGPU && supportsWebGPU ? 'gpu' : 'cpu';
-
-      // Log the mode for debugging
-      console.log(`[Background Removal] Using device: ${device} (WebGPU requested: ${useWebGPU}, supported: ${supportsWebGPU})`);
-
-      // Convert File to Blob for processing
-      const imageBlob = await removeBackground(file, {
-        model: 'isnet', // 使用完整精度模型（非量化版），边缘更精确
-        device: device as 'cpu' | 'gpu',
+    // 工具函数：执行背景移除
+    const run = (blobOrFile: Blob | File, device: 'cpu' | 'gpu') => {
+      return removeBackground(blobOrFile, {
+        model: MODEL,
+        device,
+        publicPath: PUBLIC_PATH,
         progress: (key, current, total) => {
           const progressPercent = Math.round((current / total) * 100);
           setState(prev => ({ ...prev, progress: progressPercent }));
@@ -39,26 +37,42 @@ export const useBackgroundRemoval = () => {
         output: {
           format: 'image/png',
           quality: 0.9,
-          type: 'foreground', // 输出前景（去背景后的图片）
+          type: 'foreground',
         }
       });
+    };
 
-      setState({ isProcessing: false, progress: 100, error: null });
-      return imageBlob;
+    try {
+      // Check WebGPU support
+      const supportsWebGPU = 'gpu' in navigator;
+      let device: 'cpu' | 'gpu' = useWebGPU && supportsWebGPU ? 'gpu' : 'cpu';
+
+      console.log(`[Background Removal] Using model: ${MODEL}, device: ${device}, publicPath: ${PUBLIC_PATH}`);
+
+      try {
+        // 尝试使用首选设备
+        const imageBlob = await run(file, device);
+        setState({ isProcessing: false, progress: 100, error: null });
+        return imageBlob;
+      } catch (error) {
+        // GPU 失败时自动回退到 CPU（但仍使用量化模型）
+        if (device === 'gpu') {
+          console.warn('[Background Removal] GPU failed, falling back to CPU:', error);
+          const imageBlob = await run(file, 'cpu');
+          setState({ isProcessing: false, progress: 100, error: null });
+          return imageBlob;
+        }
+        throw error;
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to remove background';
       console.error('[Background Removal] Error:', errorMessage);
 
-      // If WebGPU failed, suggest fallback
-      if (useWebGPU && errorMessage.includes('gpu')) {
-        setState({
-          isProcessing: false,
-          progress: 0,
-          error: 'WebGPU 加速失败，请尝试关闭 GPU 加速选项'
-        });
-      } else {
-        setState({ isProcessing: false, progress: 0, error: errorMessage });
-      }
+      setState({
+        isProcessing: false,
+        progress: 0,
+        error: errorMessage.includes('gpu') ? 'GPU 加速失败，CPU 模式也失败' : errorMessage
+      });
       return null;
     }
   }, []);
@@ -71,10 +85,9 @@ export const useBackgroundRemoval = () => {
       const supportsWebGPU = 'gpu' in navigator;
       const device = useWebGPU && supportsWebGPU ? 'gpu' : 'cpu';
 
-      console.log(`[Model Preload] Downloading AI model using device: ${device}`);
+      console.log(`[Model Preload] Downloading model: ${MODEL}, device: ${device}, publicPath: ${PUBLIC_PATH}`);
 
       // Create a 1x1 transparent PNG to trigger model download
-      // Base64 of a minimal 1x1 transparent PNG
       const tinyPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
       const binaryString = atob(tinyPngBase64);
       const bytes = new Uint8Array(binaryString.length);
@@ -85,8 +98,9 @@ export const useBackgroundRemoval = () => {
 
       // Trigger model download by processing tiny image
       await removeBackground(tinyImageBlob, {
-        model: 'isnet',
+        model: MODEL,
         device: device as 'cpu' | 'gpu',
+        publicPath: PUBLIC_PATH,
         progress: (key, current, total) => {
           const progressPercent = Math.round((current / total) * 100);
           setState(prev => ({ ...prev, progress: progressPercent }));
