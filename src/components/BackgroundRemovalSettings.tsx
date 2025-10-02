@@ -168,7 +168,11 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
               >
                 {isProcessing ? (
                   <>
-                    <Download className="h-4 w-4 mr-2 animate-bounce" />
+                    <img
+                      src="/assets/ui/loading.gif"
+                      alt="loading"
+                      className="h-5 w-5 mr-2 object-contain"
+                    />
                     下载中... {progress}%
                   </>
                 ) : modelLoaded ? (
