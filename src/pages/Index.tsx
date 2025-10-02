@@ -251,6 +251,7 @@ const Index = () => {
               deviceImages={deviceImages}
               onImagesChange={setDeviceImages}
               bgRemovalConfig={bgRemovalConfig}
+              compact
             />
           </>
         );

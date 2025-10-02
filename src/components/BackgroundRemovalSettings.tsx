@@ -189,44 +189,7 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
             </div>
           </div>
 
-          {/* Preload Model Button */}
-          {config.enabled && (
-            <div className="pt-2 border-t border-blue-100 dark:border-blue-900">
-              <Button
-                onClick={handlePreloadModel}
-                disabled={isProcessing || modelLoaded}
-                variant="outline"
-                size="sm"
-                className="w-full"
-              >
-                {isProcessing ? (
-                  <>
-                    <img
-                      src="/assets/ui/loading.gif"
-                      alt="loading"
-                      className="h-5 w-5 mr-2 object-contain"
-                    />
-                    下载中... {progress}%
-                  </>
-                ) : modelLoaded ? (
-                  <>
-                    <Zap className="h-4 w-4 mr-2 text-green-600" />
-                    ✅ 模型已就绪
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4 mr-2" />
-                    🚀 预加载 AI 模型（{config.highQuality !== false ? (config.useWebGPU ? '约 80 MB' : '约 150 MB') : '约 40 MB'}）
-                  </>
-                )}
-              </Button>
-              <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                {modelLoaded
-                  ? '模型已缓存，上传图片时可快速处理'
-                  : '提前下载模型可避免首次处理时等待'}
-              </p>
-            </div>
-          )}
+          {/* Removed manual preload UI per request */}
 
           {/* Additional info */}
           {config.enabled && !isProcessing && (

@@ -11,9 +11,10 @@ interface ImageUploaderProps {
   deviceImages: DeviceImages;
   onImagesChange: (images: DeviceImages) => void;
   bgRemovalConfig: BackgroundRemovalConfig;
+  compact?: boolean; // 紧凑模式：更小的间距与高度
 }
 
-export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }: ImageUploaderProps) => {
+export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig, compact = false }: ImageUploaderProps) => {
   const [dragOver, setDragOver] = useState<'front' | 'back' | null>(null);
   const [validating, setValidating] = useState(false);
   const [processingSide, setProcessingSide] = useState<'front' | 'back' | null>(null);
@@ -186,14 +187,20 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
 
   const ImageUploadCard = ({ type, file }: { type: 'front' | 'back'; file: File | null }) => {
     const isProcessingThis = isProcessing && processingSide === type;
+    const cardPadding = compact ? 'p-3' : 'p-6';
+    const loaderHeight = compact ? 'h-40' : 'h-60';
+    const previewHeight = compact ? 'h-36' : 'h-48';
+    const emptyPaddingY = compact ? 'py-4' : 'py-8';
+    const titleClass = compact ? 'text-sm' : 'font-semibold';
+    const descClass = compact ? 'text-xs' : 'text-sm';
 
     return (
       <Card className={`relative transition-all duration-300 overflow-hidden ${
         dragOver === type ? 'ring-2 ring-primary shadow-glow' : ''
       } ${file ? 'border-success' : 'border-dashed border-2'}`}>
-        <CardContent className="p-6">
+        <CardContent className={cardPadding}>
           {isProcessingThis ? (
-            <div className="relative h-60 flex items-center justify-center">
+            <div className={`relative ${loaderHeight} flex items-center justify-center`}>
               <div className="flex flex-col items-center justify-center gap-3">
                 <img
                   src="/assets/ui/loading.gif"
@@ -201,8 +208,8 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
                   className="block mx-auto h-12 w-12 md:h-16 md:w-16 object-contain"
                 />
                 <div className="text-center">
-                  <h3 className="font-semibold mb-1">正在处理图片</h3>
-                  <p className="text-sm text-muted-foreground">自动去除背景中，请稍候...</p>
+                  <h3 className={`${titleClass} mb-1`}>正在处理图片</h3>
+                  <p className={`${descClass} text-muted-foreground`}>自动去除背景中，请稍候...</p>
                 </div>
               </div>
             </div>
@@ -212,7 +219,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
                 <img
                   src={previews[type] || ''}
                   alt={type === 'front' ? '正面图片' : '背面图片'}
-                  className="w-full h-48 object-contain rounded-lg"
+                  className={`w-full ${previewHeight} object-contain rounded-lg`}
                   style={{ backgroundColor: '#f0f0f0' }}
                 />
                 <Button
@@ -226,7 +233,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
               </div>
               <div className="flex items-center gap-2 text-success">
                 <Check className="h-4 w-4" />
-                <span className="text-sm font-medium">
+                <span className={`${compact ? 'text-xs' : 'text-sm'} font-medium`}>
                   {type === 'front' ? '正面' : '背面'}模型图已上传
                   {bgRemovalConfig.enabled ? '（已去背景）' : '（原图）'}
                 </span>
@@ -234,7 +241,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
             </div>
           ) : (
           <div
-            className="text-center space-y-4 py-8"
+            className={`text-center space-y-3 ${emptyPaddingY}`}
             onDrop={(e) => handleDrop(e, type)}
             onDragOver={handleDragOver}
             onDragEnter={() => setDragOver(type)}
@@ -244,13 +251,13 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
               <Upload className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold mb-2">
+              <h3 className={`${titleClass} mb-1`}>
                 手机{type === 'front' ? '正面' : '背面'}图
               </h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className={`${descClass} text-muted-foreground mb-3`}>
                 拖拽图片到此处或点击上传
               </p>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+              <div className={`flex items-center gap-2 ${compact ? 'text-[10px]' : 'text-xs'} text-muted-foreground mb-3`}>
                 <AlertCircle className="h-4 w-4" />
                 <span>
                   {bgRemovalConfig.enabled
@@ -270,7 +277,7 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
               />
               <Button
                 variant="outline"
-                className="w-full"
+                className={`w-full ${compact ? 'h-8 text-xs' : ''}`}
                 asChild
                 disabled={validating || isProcessing}
               >
@@ -287,15 +294,18 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
   };
 
   return (
-    <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">上传手机模型图</h2>
-        <p className="text-muted-foreground">
-          上传手机的正面和背面白底图，用于后续生成产品展示图
-        </p>
-      </div>
+    <div className={compact ? 'space-y-3' : 'space-y-6'}>
+      {!compact && (
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold">上传手机模型图</h2>
+          <p className="text-muted-foreground">
+            上传手机的正面和背面白底图，用于后续生成产品展示图
+          </p>
+        </div>
+      )}
 
       {/* 重要提示 */}
+      {!compact && (
       <details className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
         <summary className="flex items-center gap-2 cursor-pointer select-none">
           <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
@@ -308,8 +318,10 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
           <p>❌ <strong>不推荐：</strong>浅色系列壁纸（包括彩色渐变、亮色背景等）会影响后续处理</p>
         </div>
       </details>
+      )}
 
       {/* 示例图展示（默认折叠，减少占用） */}
+      {!compact && (
       <details className="bg-muted/30 rounded-lg p-4 border border-dashed border-muted-foreground/30">
         <summary className="flex items-center gap-2 cursor-pointer select-none">
           <Check className="h-4 w-4 text-green-600" />
@@ -336,8 +348,9 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
           </div>
         </div>
       </details>
+      )}
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className={`grid md:grid-cols-2 ${compact ? 'gap-3' : 'gap-6'}`}>
         <ImageUploadCard type="front" file={deviceImages.front} />
         <ImageUploadCard type="back" file={deviceImages.back} />
       </div>
