@@ -240,25 +240,10 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
     const hasCustom = !!selections[instanceId]?.customImage;
     const [dragOver, setDragOver] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    // 直接使用 selection 中的 URL，避免本地副本被误清理
+    const previewUrl = selections[instanceId]?.customPreviewUrl || '';
     const [cutout, setCutout] = useState(false);
     const { removeImageBackground, isProcessing: isCutting } = useBackgroundRemoval();
-
-    // 仅在已上传自定义素材时显示预览
-    useEffect(() => {
-      const urlFromSel = selections[instanceId]?.customPreviewUrl || '';
-      if (!urlFromSel) {
-        if (previewUrl) {
-          try { URL.revokeObjectURL(previewUrl); } catch {}
-        }
-        setPreviewUrl(null);
-        return;
-      }
-      setPreviewUrl(urlFromSel);
-      return () => {
-        try { URL.revokeObjectURL(urlFromSel); } catch {}
-      };
-    }, [selections, instanceId]);
 
     const statusText = hasCustom
       ? '已上传自定义素材，可更换或恢复默认'
@@ -297,6 +282,8 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
       // 兼容旧回调（可忽略外部状态）
       onDualPreviewChange(finalFile);
       onShowDualFront(true);
+      const prevUrl = selections[instanceId]?.customPreviewUrl;
+      if (prevUrl) { try { URL.revokeObjectURL(prevUrl); } catch {} }
       const url = URL.createObjectURL(finalFile);
       onSelectionChange(prev => ({
         ...prev,
@@ -397,7 +384,7 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
                         setFrontIds(ids => ids.filter(id => id !== instanceId));
                       }}
                     >
-                    移除卡片
+                      移除卡片
                     </Button>
                   )}
                 </div>
@@ -413,24 +400,9 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
     const hasCustom = !!selections[instanceId]?.customImage;
     const [dragOver, setDragOver] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const previewUrl = selections[instanceId]?.customPreviewUrl || '';
     const [cutout, setCutout] = useState(false);
     const { removeImageBackground, isProcessing: isCutting } = useBackgroundRemoval();
-
-    useEffect(() => {
-      const urlFromSel = selections[instanceId]?.customPreviewUrl || '';
-      if (!urlFromSel) {
-        if (previewUrl) {
-          try { URL.revokeObjectURL(previewUrl); } catch {}
-        }
-        setPreviewUrl(null);
-        return;
-      }
-      setPreviewUrl(urlFromSel);
-      return () => {
-        try { URL.revokeObjectURL(urlFromSel); } catch {}
-      };
-    }, [selections, instanceId]);
 
     const statusText = hasCustom
       ? '已上传自定义素材，可更换或恢复默认'
@@ -468,6 +440,8 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
 
       onDualPreviewBackChange(finalFile);
       onShowDualBack(true);
+      const prevUrl = selections[instanceId]?.customPreviewUrl;
+      if (prevUrl) { try { URL.revokeObjectURL(prevUrl); } catch {} }
       const url = URL.createObjectURL(finalFile);
       onSelectionChange(prev => ({
         ...prev,
