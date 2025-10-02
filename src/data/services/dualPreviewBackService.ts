@@ -1,18 +1,18 @@
 import { RepairService } from '@/types/repair';
 
-export const dualPreviewService: RepairService = {
-  id: 'dual-preview-front',
-  title: 'Dual Preview Front',
-  titleCN: '双图效果 · 正面',
-  description: '使用正面模型图作为右侧参照，左侧可上传自定义素材。',
+export const dualPreviewBackService: RepairService = {
+  id: 'dual-preview-back',
+  title: 'Dual Preview Back',
+  titleCN: '双图效果 · 背面',
+  description: '使用背面模型图作为右侧参照，左侧可上传自定义素材。',
   category: 'hardware',
-  thumbnail: '/service-previews/Cambiar Pantalla Xiaomi 15....jpg',
+  thumbnail: '/service-previews/Cambiar Tapa Trasera Xiaomi....jpg',
   needsPartImage: true,
-  useModelSide: 'front',
+  useModelSide: 'back',
   layout: {
     type: 'side-by-side',
     leftWidthCanvasRatio: 0.38,
-    // 再向左挪一些，增大中缝留白
+    // 与正面一致，但也略向左偏移，腾出中缝
     leftCanvasOffsetRatioX: 0.06,
     rightHeightRatio: 0.80,
     badges: [
@@ -22,3 +22,4 @@ export const dualPreviewService: RepairService = {
   },
   implemented: true,
 };
+

@@ -961,8 +961,13 @@ export const useImageProcessing = () => {
         // Simulate image processing delay
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Find service config
-        const serviceConfig = ALL_SERVICES.find(s => s.id === selection.serviceId);
+        // Find service config (support dynamic instance ids like dual-preview-front-xxxx)
+        const baseId = selection.serviceId.startsWith('dual-preview-front')
+          ? 'dual-preview-front'
+          : selection.serviceId.startsWith('dual-preview-back')
+          ? 'dual-preview-back'
+          : selection.serviceId;
+        const serviceConfig = ALL_SERVICES.find(s => s.id === baseId);
         if (!serviceConfig) continue;
 
         // Determine source image based on service config

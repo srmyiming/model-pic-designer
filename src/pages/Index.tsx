@@ -35,10 +35,13 @@ const Index = () => {
     highQuality: true, // 默认开启高精度，参考较好版本效果
   });
   const [dualPreviewImage, setDualPreviewImage] = useState<File | null>(null);
+  const [dualPreviewBackImage, setDualPreviewBackImage] = useState<File | null>(null);
+  const [showDualFront, setShowDualFront] = useState<boolean>(false);
+  const [showDualBack, setShowDualBack] = useState<boolean>(false);
 
   useEffect(() => {
     setSelections(prev => {
-      const source = dualPreviewImage ?? deviceImages.front;
+      const source = showDualFront ? (dualPreviewImage ?? deviceImages.front) : null;
       const current = prev['dual-preview-front'];
 
       if (!source) {
@@ -71,15 +74,42 @@ const Index = () => {
         },
       };
     });
-  }, [dualPreviewImage, deviceImages.front]);
+  }, [showDualFront, dualPreviewImage, deviceImages.front]);
 
-  const handleDualPreviewUpload = (file: File) => {
-    setDualPreviewImage(file);
-  };
+  useEffect(() => {
+    setSelections(prev => {
+      const source = showDualBack ? (dualPreviewBackImage ?? deviceImages.back) : null;
+      const current = prev['dual-preview-back'];
 
-  const handleDualPreviewReset = () => {
-    setDualPreviewImage(null);
-  };
+      if (!source) {
+        if (!current) return prev;
+        if (current.customPreviewUrl) {
+          try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
+        }
+        const { ['dual-preview-back']: _, ...rest } = prev;
+        return rest;
+      }
+
+      if (current?.customImage === source && current.customPreviewUrl) {
+        return prev;
+      }
+
+      const preview = URL.createObjectURL(source);
+      if (current?.customPreviewUrl) {
+        try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
+      }
+
+      return {
+        ...prev,
+        ['dual-preview-back']: {
+          serviceId: 'dual-preview-back',
+          customImage: source,
+          customPreviewUrl: preview,
+          isSelected: current?.isSelected ?? false,
+        },
+      };
+    });
+  }, [showDualBack, dualPreviewBackImage, deviceImages.back]);
 
   const {
     processedImages,
@@ -263,6 +293,13 @@ const Index = () => {
             frontImage={deviceImages.front}
             dualPreviewImage={dualPreviewImage}
             onDualPreviewChange={setDualPreviewImage}
+            backImage={deviceImages.back}
+            dualPreviewBackImage={dualPreviewBackImage}
+            onDualPreviewBackChange={setDualPreviewBackImage}
+            showDualFront={showDualFront}
+            showDualBack={showDualBack}
+            onShowDualFront={setShowDualFront}
+            onShowDualBack={setShowDualBack}
           />
         );
       case 2:
