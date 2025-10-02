@@ -17,6 +17,7 @@ import { cameraServices } from './cameraServices';
 import { audioServices } from './audioServices';
 import { buttonServices } from './buttonServices';
 import { protectionServices } from './protectionServices';
+import { dualPreviewService } from './dualPreviewService';
 
 /**
  * 所有服务的统一导出
@@ -29,6 +30,7 @@ export const ALL_SERVICES = [
   ...protectionServices,     // 保护类
   ...audioServices,          // 音频类
   ...buttonServices,         // 按键类
+  dualPreviewService,
 ];
 
 // 开发期唯一性校验：确保 service.id 不重复，避免 UI/处理管线出现“撞 ID”问题

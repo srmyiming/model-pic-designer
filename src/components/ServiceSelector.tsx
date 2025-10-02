@@ -4,16 +4,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, Check } from 'lucide-react';
 import { RepairService, ServiceSelection } from '@/types/repair';
 import { ALL_SERVICES } from '@/data/services';
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { toast } from '@/hooks/use-toast';
 
 interface ServiceSelectorProps {
   selections: Record<string, ServiceSelection>;
   onSelectionChange: Dispatch<SetStateAction<Record<string, ServiceSelection>>>;
+  frontImage: File | null;
+  dualPreviewImage: File | null;
+  onDualPreviewChange: (file: File | null) => void;
 }
 
-export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelectorProps) => {
+export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dualPreviewImage, onDualPreviewChange }: ServiceSelectorProps) => {
   const handleServiceToggle = useCallback((service: RepairService) => {
     onSelectionChange(prev => {
       const current = prev[service.id];
@@ -30,9 +33,9 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
     });
   }, [onSelectionChange]);
 
-  // 展示所有已实现服务，另外额外保留“更换后置摄像头”
+  // 展示所有已实现服务，额外保留“更换后置摄像头”和“双图效果”
   const visibleServices = ALL_SERVICES.filter(
-    (s) => (s.implemented === true || s.id === 'rear-camera') && s.id !== 'charging-port'
+    (s) => (s.implemented === true || s.id === 'rear-camera') && s.id !== 'charging-port' && s.id !== 'dual-preview-front'
   );
 
   // 计算是否所有可见服务都被选中
@@ -200,6 +203,145 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
     );
   };
 
+  // 专用：双图效果服务卡（不沿用通用卡片样式）
+  const DualPreviewServiceCard = () => {
+    const isSelected = !!selections['dual-preview-front']?.isSelected;
+    const hasCustom = !!dualPreviewImage;
+    const [dragOver, setDragOver] = useState(false);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    // 仅在已上传自定义素材时显示预览
+    useEffect(() => {
+      if (!dualPreviewImage) {
+        if (previewUrl) {
+          try { URL.revokeObjectURL(previewUrl); } catch {}
+        }
+        setPreviewUrl(null);
+        return;
+      }
+      const url = URL.createObjectURL(dualPreviewImage);
+      setPreviewUrl(url);
+      return () => {
+        try { URL.revokeObjectURL(url); } catch {}
+      };
+    }, [dualPreviewImage]);
+
+    const statusText = hasCustom
+      ? '已上传自定义素材，可更换或恢复默认'
+      : frontImage
+      ? '默认使用正面模型图，上传后替换左侧'
+      : '请先在步骤1上传正面模型图';
+
+    const disabled = false; // 允许随时上传；若缺少正面图，生成阶段会提示
+
+    const selectToggle = () => {
+      onSelectionChange(prev => ({
+        ...prev,
+        ['dual-preview-front']: {
+          serviceId: 'dual-preview-front',
+          customImage: prev['dual-preview-front']?.customImage,
+          customPreviewUrl: prev['dual-preview-front']?.customPreviewUrl,
+          isSelected: !(prev['dual-preview-front']?.isSelected ?? false),
+        },
+      }));
+    };
+
+    const handleUpload = (file: File) => {
+      onDualPreviewChange(file);
+      onSelectionChange(prev => ({
+        ...prev,
+        ['dual-preview-front']: {
+          serviceId: 'dual-preview-front',
+          customImage: file,
+          customPreviewUrl: prev['dual-preview-front']?.customPreviewUrl, // 由外层 effect 刷新
+          isSelected: true,
+        },
+      }));
+      toast({ title: '双图素材已更新', description: '已设为选中，将使用左侧自定义素材。' });
+    };
+
+    const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setDragOver(false);
+      const f = e.dataTransfer.files?.[0];
+      if (f && f.type.startsWith('image/')) handleUpload(f);
+    };
+
+    return (
+      <Card className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-primary border-primary' : 'hover:border-primary/50'}`}>
+        <CardContent className="p-2">
+          <div className="space-y-1.5">
+            <div
+              className={`relative aspect-square rounded overflow-hidden border-2 border-dashed flex items-center justify-center text-center p-4 ${dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/40'}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+            >
+              {previewUrl ? (
+                <img src={previewUrl} alt="自定义素材预览" className="max-h-full max-w-full object-contain rounded" />
+              ) : (
+                <div>
+                  <Upload className="mx-auto h-6 w-6 text-primary" />
+                  <div className="mt-2 text-xs text-muted-foreground">拖拽图片到此处或点击下方按钮上传</div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">{statusText}</div>
+                </div>
+              )}
+              <div className="absolute top-1 left-1">
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={selectToggle}
+                  disabled={!hasCustom}
+                  className="bg-white shadow-sm h-4 w-4"
+                />
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              <h3 className="font-semibold text-xs leading-tight">双图效果 · 正面</h3>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground text-center py-1">
+                {hasCustom ? '✓ 已上传' : '使用正面模型图'}
+              </div>
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(file);
+                  e.currentTarget.value = '';
+                }}
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[10px] h-6 px-2"
+                  disabled={disabled}
+                  onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                >
+                  <Upload className="h-2.5 w-2.5 mr-0.5" /> {hasCustom ? '更换' : '上传自定义素材'}
+                </Button>
+                {hasCustom && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-[10px] h-6 px-2"
+                    onClick={(e) => { e.stopPropagation(); onDualPreviewChange(null); selectToggle(); }}
+                  >
+                    取消选择
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -246,6 +388,7 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
         {visibleServices.map((service, index) => (
           <ServiceCard key={service.id} service={service} index={index + 1} />
         ))}
+        <DualPreviewServiceCard />
       </div>
     </div>
   );

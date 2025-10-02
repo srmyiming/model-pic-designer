@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ImageUploader } from '@/components/ImageUploader';
@@ -34,7 +34,52 @@ const Index = () => {
     useWebGPU: false,  // 默认关闭（保守策略）
     highQuality: true, // 默认开启高精度，参考较好版本效果
   });
-  // 移除品牌与型号输入，改由 SKU 对话框收集型号信息
+  const [dualPreviewImage, setDualPreviewImage] = useState<File | null>(null);
+
+  useEffect(() => {
+    setSelections(prev => {
+      const source = dualPreviewImage ?? deviceImages.front;
+      const current = prev['dual-preview-front'];
+
+      if (!source) {
+        if (!current) {
+          return prev;
+        }
+        if (current.customPreviewUrl) {
+          try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
+        }
+        const { ['dual-preview-front']: _, ...rest } = prev;
+        return rest;
+      }
+
+      if (current?.customImage === source && current.customPreviewUrl) {
+        return prev;
+      }
+
+      const preview = URL.createObjectURL(source);
+      if (current?.customPreviewUrl) {
+        try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
+      }
+
+      return {
+        ...prev,
+        ['dual-preview-front']: {
+          serviceId: 'dual-preview-front',
+          customImage: source,
+          customPreviewUrl: preview,
+          isSelected: current?.isSelected ?? false,
+        },
+      };
+    });
+  }, [dualPreviewImage, deviceImages.front]);
+
+  const handleDualPreviewUpload = (file: File) => {
+    setDualPreviewImage(file);
+  };
+
+  const handleDualPreviewReset = () => {
+    setDualPreviewImage(null);
+  };
 
   const {
     processedImages,
@@ -214,6 +259,9 @@ const Index = () => {
           <ServiceSelector
             selections={selections}
             onSelectionChange={setSelections}
+            frontImage={deviceImages.front}
+            dualPreviewImage={dualPreviewImage}
+            onDualPreviewChange={setDualPreviewImage}
           />
         );
       case 2:
