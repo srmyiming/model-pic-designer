@@ -63,14 +63,22 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
     onChange({ ...config, useWebGPU: checked });
   };
 
+  const handleHighQualityChange = (checked: boolean) => {
+    onChange({ ...config, highQuality: !!checked });
+  };
+
   const handlePreloadModel = async () => {
     try {
+      const sizeText = config.highQuality
+        ? (config.useWebGPU ? '约 80 MB 的高精度模型' : '约 150 MB 的高精度模型')
+        : '约 40 MB 的量化模型';
+
       toast({
         title: "开始下载 AI 模型",
-        description: `正在下载约 40 MB 的量化模型（${config.useWebGPU ? 'GPU 加速' : 'CPU 模式'}）...`,
+        description: `正在下载${sizeText}（${config.useWebGPU ? 'GPU 加速' : 'CPU 模式'}）...`,
       });
 
-      await preloadModel(config.useWebGPU);
+      await preloadModel(config.useWebGPU, !!config.highQuality);
 
       setModelLoaded(true);
       sessionStorage.setItem(MODEL_LOADED_KEY, 'true');
@@ -156,6 +164,31 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
             </div>
           </div>
 
+          {/* High Quality toggle */}
+          <div className="flex items-start space-x-3">
+            <Checkbox
+              id="bg-removal-hq"
+              checked={config.highQuality !== false}
+              onCheckedChange={handleHighQualityChange}
+              disabled={!config.enabled}
+            />
+            <div className="flex-1 space-y-1">
+              <label
+                htmlFor="bg-removal-hq"
+                className={`text-sm font-medium leading-none cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70`}
+              >
+                高精度抠图（更好边缘，模型更大）
+              </label>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>
+                  {config.highQuality !== false
+                    ? (config.useWebGPU ? '使用 isnet_fp16（约80MB）' : '使用 isnet（约150MB）')
+                    : '使用 isnet_quint8（约40MB）'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Preload Model Button */}
           {config.enabled && (
             <div className="pt-2 border-t border-blue-100 dark:border-blue-900">
@@ -183,7 +216,7 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
                 ) : (
                   <>
                     <Download className="h-4 w-4 mr-2" />
-                    🚀 预加载 AI 模型（可选，约 40 MB）
+                    🚀 预加载 AI 模型（{config.highQuality !== false ? (config.useWebGPU ? '约 80 MB' : '约 150 MB') : '约 40 MB'}）
                   </>
                 )}
               </Button>
@@ -203,6 +236,10 @@ export const BackgroundRemovalSettings = ({ config, onChange }: BackgroundRemova
                 {config.useWebGPU
                   ? '已启用 GPU 加速，处理速度更快。如遇到问题可关闭此选项。'
                   : '使用 CPU 模式处理。如需更快速度，可尝试开启 GPU 加速。'}
+                {' '}
+                {config.highQuality !== false
+                  ? '已启用高精度模型，细节更好。'
+                  : '已启用极速模型，下载更快。'}
               </p>
             </div>
           )}

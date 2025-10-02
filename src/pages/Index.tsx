@@ -5,9 +5,8 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ServiceSelector } from '@/components/ServiceSelector';
 import { ProcessingPreview } from '@/components/ProcessingPreview';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
-import { DeviceImages, ServiceSelection, BackgroundRemovalConfig, PhoneBrand } from '@/types/repair';
+import { DeviceImages, ServiceSelection, BackgroundRemovalConfig } from '@/types/repair';
 import { BackgroundRemovalSettings } from '@/components/BackgroundRemovalSettings';
-import { PhoneBrandSelector } from '@/components/PhoneBrandSelector';
 import { ChevronRight, ChevronLeft, Smartphone, Wrench, Download } from 'lucide-react';
 import { ALL_SERVICES } from '@/data/services';
 import {
@@ -31,11 +30,11 @@ const Index = () => {
   const [sku, setSku] = useState('');
   const [showSkuOnImage, setShowSkuOnImage] = useState(true);
   const [bgRemovalConfig, setBgRemovalConfig] = useState<BackgroundRemovalConfig>({
-    enabled: true,    // 默认开启（保持现有行为）
-    useWebGPU: false, // 默认关闭（保守策略）
+    enabled: true,     // 默认开启（保持现有行为）
+    useWebGPU: false,  // 默认关闭（保守策略）
+    highQuality: true, // 默认开启高精度，参考较好版本效果
   });
-  const [brand, setBrand] = useState<PhoneBrand | null>(null);
-  const [modelName, setModelName] = useState('');
+  // 移除品牌与型号输入，改由 SKU 对话框收集型号信息
 
   const {
     processedImages,
@@ -54,8 +53,8 @@ const Index = () => {
   const canProceedToStep = (step: number) => {
     switch (step) {
       case 1:
-        // 步骤1: 必须选择品牌 + 填写型号
-        return !!brand && modelName.trim().length > 0;
+        // 步骤1: 不再要求品牌与型号，直接允许
+        return true;
       case 2:
         // 步骤2: 检查服务选择完整性
         const hasSelection = Object.values(selections).some(s => s.isSelected);
@@ -199,15 +198,6 @@ const Index = () => {
       case 0:
         return (
           <>
-            <PhoneBrandSelector value={brand} onChange={setBrand} />
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">手机型号（必填）</label>
-              <Input
-                placeholder="请输入手机型号（如：Xiaomi 15 Ultra）"
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
-              />
-            </div>
             <BackgroundRemovalSettings
               config={bgRemovalConfig}
               onChange={setBgRemovalConfig}

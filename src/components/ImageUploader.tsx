@@ -95,7 +95,11 @@ export const ImageUploader = ({ deviceImages, onImagesChange, bgRemovalConfig }:
           description: `正在自动去除背景（${bgRemovalConfig.useWebGPU ? 'GPU加速' : 'CPU模式'}），请稍候...`,
         });
 
-        const processedBlob = await removeImageBackground(file, bgRemovalConfig.useWebGPU);
+        const processedBlob = await removeImageBackground(
+          file,
+          bgRemovalConfig.useWebGPU,
+          bgRemovalConfig.highQuality !== false
+        );
 
         if (!processedBlob) {
           toast({

@@ -1,86 +1,82 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, Check } from 'lucide-react';
 import { RepairService, ServiceSelection } from '@/types/repair';
 import { ALL_SERVICES } from '@/data/services';
+import { useRef, useCallback, useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
+import { toast } from '@/hooks/use-toast';
 
 interface ServiceSelectorProps {
   selections: Record<string, ServiceSelection>;
-  onSelectionChange: (selections: Record<string, ServiceSelection>) => void;
+  onSelectionChange: Dispatch<SetStateAction<Record<string, ServiceSelection>>>;
 }
 
-const categoryColors = {
-  screen: 'bg-blue-100 text-blue-800',
-  hardware: 'bg-green-100 text-green-800',
-  protection: 'bg-purple-100 text-purple-800',
-  camera: 'bg-orange-100 text-orange-800',
-  audio: 'bg-pink-100 text-pink-800',
-  buttons: 'bg-cyan-100 text-cyan-800',
-  system: 'bg-red-100 text-red-800',
-};
-
-const categoryLabels = {
-  screen: '屏幕',
-  hardware: '硬件',
-  protection: '保护',
-  camera: '摄像头',
-  audio: '音频',
-  buttons: '按键',
-  system: '系统',
-};
-
 export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelectorProps) => {
-  const handleServiceToggle = (service: RepairService) => {
-    const newSelections = {
-      ...selections,
-      [service.id]: {
+  const handleServiceToggle = useCallback((service: RepairService) => {
+    onSelectionChange(prev => {
+      const current = prev[service.id];
+      const next: ServiceSelection = {
         serviceId: service.id,
-        isSelected: !selections[service.id]?.isSelected,
-        customImage: selections[service.id]?.customImage,
-      }
-    };
-    onSelectionChange(newSelections);
-  };
+        customImage: current?.customImage,
+        customPreviewUrl: current?.customPreviewUrl,
+        isSelected: !(current?.isSelected ?? false),
+      };
+      return {
+        ...prev,
+        [service.id]: next,
+      };
+    });
+  }, [onSelectionChange]);
 
-  // 计算是否所有已实现的产品都被选中了
-  const implementedServices = ALL_SERVICES.filter(s => s.implemented === true);
-  const allImplementedSelected = implementedServices.every(
+  // 展示所有已实现服务，另外额外保留“更换后置摄像头”
+  const visibleServices = ALL_SERVICES.filter(
+    (s) => (s.implemented === true || s.id === 'rear-camera') && s.id !== 'charging-port'
+  );
+
+  // 计算是否所有可见服务都被选中
+  const allImplementedSelected = visibleServices.every(
     service => selections[service.id]?.isSelected
   );
 
-  const handleSelectAll = () => {
-    const newSelections: Record<string, ServiceSelection> = {};
-    ALL_SERVICES.forEach(service => {
-      const isImplemented = service.implemented === true;
-      newSelections[service.id] = {
-        serviceId: service.id,
-        // 如果当前是全选状态，就取消全选；否则全选
-        isSelected: isImplemented ? !allImplementedSelected : false,
-        customImage: selections[service.id]?.customImage,
-      };
+  const handleSelectAll = useCallback(() => {
+    onSelectionChange(prev => {
+      const next: Record<string, ServiceSelection> = { ...prev };
+      visibleServices.forEach(service => {
+        const existing = prev[service.id];
+        next[service.id] = {
+          serviceId: service.id,
+          customImage: existing?.customImage,
+          customPreviewUrl: existing?.customPreviewUrl,
+          isSelected: !allImplementedSelected,
+        };
+      });
+      return next;
     });
-    onSelectionChange(newSelections);
-  };
+  }, [allImplementedSelected, onSelectionChange, visibleServices]);
 
-  const handleImageUpload = (serviceId: string, file: File) => {
-    const newSelections = {
-      ...selections,
+  const handleImageUpload = useCallback((serviceId: string, file: File) => {
+    const preview = URL.createObjectURL(file);
+    toast({
+      title: '配件图已上传',
+      description: '预览已更新，可继续配置其他产品。',
+    });
+    onSelectionChange(prev => ({
+      ...prev,
       [serviceId]: {
-        ...selections[serviceId],
         serviceId,
         customImage: file,
+        customPreviewUrl: preview,
         isSelected: true,
-      }
-    };
-    onSelectionChange(newSelections);
-  };
+      },
+    }));
+  }, [onSelectionChange]);
 
-  const selectedCount = Object.values(selections).filter(s => s.isSelected).length;
+  const selectedCount = visibleServices.filter(s => selections[s.id]?.isSelected).length;
 
   // Check if any selected service needs part image but hasn't uploaded and has no default
-  const missingImages = ALL_SERVICES.filter(service => {
+  const missingImages = visibleServices.filter(service => {
     const sel = selections[service.id];
     return sel?.isSelected && service.needsPartImage && !sel.customImage && !service.defaultPartImage;
   });
@@ -88,7 +84,10 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
   const ServiceCard = ({ service, index }: { service: RepairService; index: number }) => {
     const isSelected = selections[service.id]?.isSelected || false;
     const hasCustomImage = selections[service.id]?.customImage;
-    const isImplemented = service.implemented === true; // Only true if explicitly set
+    const previewUrl = selections[service.id]?.customPreviewUrl || '';
+    // 允许 'rear-camera' 当作已实现使用
+    const isImplemented = service.implemented === true || service.id === 'rear-camera';
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
     return (
       <Card
@@ -125,6 +124,21 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
                   className="bg-white shadow-sm h-4 w-4 pointer-events-none"
                 />
               </div>
+              {service.needsPartImage && previewUrl && (() => {
+                const sLayout: any = (service as any).layout || {};
+                const widthPercent = Math.max(5, Math.min(90, (sLayout.leftWidthCanvasRatio ?? 0.38) * 100));
+                const leftPercent = Math.max(0, Math.min(90, (sLayout.leftCanvasOffsetRatioX ?? 0.10) * 100));
+                return (
+                  <div
+                    className="absolute z-10 rounded-md border border-white/70 bg-white/40 backdrop-blur-[1px] shadow-md overflow-hidden"
+                    style={{ left: `${leftPercent}%`, width: `${widthPercent}%`, top: '50%', transform: 'translateY(-50%)', height: '80%' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <img src={previewUrl} alt="配件预览" className="w-full h-full object-contain" />
+                    <div className="absolute top-0 left-0 text-[10px] bg-black/50 text-white px-1 py-0.5">配件预览</div>
+                  </div>
+                );
+              })()}
               <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
                 {index}
               </div>
@@ -149,27 +163,29 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
                   )}
 
                   <input
+                    ref={inputRef}
                     type="file"
                     accept="image/*"
-                    id={`service-${service.id}`}
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) handleImageUpload(service.id, file);
+                      // 允许选择同一个文件时也能再次触发 change
+                      e.currentTarget.value = '';
                     }}
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     className="w-full text-[10px] h-6 px-2"
-                    asChild
                     disabled={!isImplemented}
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      inputRef.current?.click();
+                    }}
                   >
-                    <label htmlFor={`service-${service.id}`} className="cursor-pointer">
-                      <Upload className="h-2.5 w-2.5 mr-0.5" />
-                      {hasCustomImage ? '更换' : '上传产品图'}
-                    </label>
+                    <Upload className="h-2.5 w-2.5 mr-0.5" />
+                    {hasCustomImage ? '更换' : '上传产品图'}
                   </Button>
                 </>
               ) : (
@@ -227,7 +243,7 @@ export const ServiceSelector = ({ selections, onSelectionChange }: ServiceSelect
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {ALL_SERVICES.map((service, index) => (
+        {visibleServices.map((service, index) => (
           <ServiceCard key={service.id} service={service} index={index + 1} />
         ))}
       </div>

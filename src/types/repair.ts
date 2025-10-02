@@ -118,6 +118,7 @@ export interface DeviceImages {
 export interface ServiceSelection {
   serviceId: string;             // 关联的服务 ID
   customImage?: File;            // 可选：该服务需要的配件图
+  customPreviewUrl?: string;     // 可选：该配件图的预览 URL（ObjectURL）
   isSelected: boolean;           // 是否被用户勾选
 }
 
@@ -137,5 +138,5 @@ export type PhoneBrand = 'generic' | 'apple' | 'samsung' | 'xiaomi';
 export interface BackgroundRemovalConfig {
   enabled: boolean;    // 是否启用背景移除
   useWebGPU: boolean;  // 是否启用 WebGPU 加速（需要浏览器支持）
+  highQuality?: boolean; // 高精度抠图（更大模型，边缘更好），默认 true
 }
-
