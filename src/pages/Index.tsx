@@ -28,7 +28,7 @@ const Index = () => {
   const [selections, setSelections] = useState<Record<string, ServiceSelection>>({});
   const [showSkuDialog, setShowSkuDialog] = useState(false);
   const [sku, setSku] = useState('');
-  const [showSkuOnImage, setShowSkuOnImage] = useState(true);
+  const [showSkuOnImage, setShowSkuOnImage] = useState(false);
   const [bgRemovalConfig, setBgRemovalConfig] = useState<BackgroundRemovalConfig>({
     enabled: true,     // 默认开启（保持现有行为）
     useWebGPU: false,  // 默认关闭（保守策略）
@@ -164,6 +164,24 @@ const Index = () => {
     }
   };
 
+  // 完成：重置状态并返回步骤1（首页）
+  const handleFinish = () => {
+    // 清空选择与结果，回到第一步。
+    setSelections({});
+    setCurrentStep(0);
+    setShowSkuDialog(false);
+    // 保留已上传的正/背面图，便于继续处理；如需一并清空，请取消注释：
+    // setDeviceImages({ front: null, back: null });
+    // 强制刷新首页，确保所有状态/对象URL彻底重置
+    setTimeout(() => {
+      try {
+        window.location.reload();
+      } catch {
+        window.location.href = '/';
+      }
+    }, 0);
+  };
+
   const handleSkuSubmit = () => {
     if (!sku.trim()) {
       alert('请输入SKU名称');
@@ -199,8 +217,8 @@ const Index = () => {
             进度 {Math.round(stepProgress)}%
           </div>
           <Button
-            onClick={handleNext}
-            disabled={currentStep === steps.length - 1 || !canProceedToStep(currentStep + 1)}
+            onClick={currentStep === steps.length - 1 ? handleFinish : handleNext}
+            disabled={currentStep !== steps.length - 1 && !canProceedToStep(currentStep + 1)}
             className="flex items-center gap-2"
           >
             {currentStep === steps.length - 1 ? '完成' : '下一步'}
@@ -287,20 +305,21 @@ const Index = () => {
         );
       case 1:
         return (
-          <ServiceSelector
-            selections={selections}
-            onSelectionChange={setSelections}
-            frontImage={deviceImages.front}
-            dualPreviewImage={dualPreviewImage}
-            onDualPreviewChange={setDualPreviewImage}
-            backImage={deviceImages.back}
-            dualPreviewBackImage={dualPreviewBackImage}
-            onDualPreviewBackChange={setDualPreviewBackImage}
-            showDualFront={showDualFront}
-            showDualBack={showDualBack}
-            onShowDualFront={setShowDualFront}
-            onShowDualBack={setShowDualBack}
-          />
+            <ServiceSelector
+              selections={selections}
+              onSelectionChange={setSelections}
+              frontImage={deviceImages.front}
+              dualPreviewImage={dualPreviewImage}
+              onDualPreviewChange={setDualPreviewImage}
+              backImage={deviceImages.back}
+              dualPreviewBackImage={dualPreviewBackImage}
+              onDualPreviewBackChange={setDualPreviewBackImage}
+              showDualFront={showDualFront}
+              showDualBack={showDualBack}
+              onShowDualFront={setShowDualFront}
+              onShowDualBack={setShowDualBack}
+              bgRemovalConfig={bgRemovalConfig}
+            />
         );
       case 2:
         return (

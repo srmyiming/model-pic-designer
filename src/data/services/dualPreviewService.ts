@@ -11,9 +11,10 @@ export const dualPreviewService: RepairService = {
   useModelSide: 'front',
   layout: {
     type: 'side-by-side',
-    leftWidthCanvasRatio: 0.38,
-    // 再向左挪一些，增大中缝留白
-    leftCanvasOffsetRatioX: 0.06,
+    // 放大配件：固定宽度↑
+    leftWidthCanvasRatio: 0.4,
+    // 保持中缝留白：左移至 0.04（= 32px）
+    leftCanvasOffsetRatioX: 0.04,
     rightHeightRatio: 0.80,
     badges: [
       { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },

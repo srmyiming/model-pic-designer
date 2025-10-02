@@ -11,9 +11,10 @@ export const dualPreviewBackService: RepairService = {
   useModelSide: 'back',
   layout: {
     type: 'side-by-side',
-    leftWidthCanvasRatio: 0.38,
-    // 与正面一致，但也略向左偏移，腾出中缝
-    leftCanvasOffsetRatioX: 0.06,
+    // 放大配件（背面同策略）
+    leftWidthCanvasRatio: 0.46,
+    // 保持中缝留白
+    leftCanvasOffsetRatioX: 0.04,
     rightHeightRatio: 0.80,
     badges: [
       { src: '/assets/badges/logo2.png', widthRatio: 0.07, yRatio: 0.42 },
@@ -22,4 +23,3 @@ export const dualPreviewBackService: RepairService = {
   },
   implemented: true,
 };
-

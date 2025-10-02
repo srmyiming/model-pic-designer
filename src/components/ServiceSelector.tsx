@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, Check } from 'lucide-react';
-import { RepairService, ServiceSelection } from '@/types/repair';
+import { RepairService, ServiceSelection, BackgroundRemovalConfig } from '@/types/repair';
 import { ALL_SERVICES } from '@/data/services';
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -22,9 +22,10 @@ interface ServiceSelectorProps {
   showDualBack: boolean;
   onShowDualFront: (value: boolean) => void;
   onShowDualBack: (value: boolean) => void;
+  bgRemovalConfig?: BackgroundRemovalConfig; // 传入步骤1的设置，用于“上传时抠图”
 }
 
-export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dualPreviewImage, onDualPreviewChange, backImage, dualPreviewBackImage, onDualPreviewBackChange, showDualFront, showDualBack, onShowDualFront, onShowDualBack }: ServiceSelectorProps) => {
+export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dualPreviewImage, onDualPreviewChange, backImage, dualPreviewBackImage, onDualPreviewBackChange, showDualFront, showDualBack, onShowDualFront, onShowDualBack, bgRemovalConfig }: ServiceSelectorProps) => {
   // 多实例支持：本地维护实例ID列表
   const [frontIds, setFrontIds] = useState<string[]>([]);
   const [backIds, setBackIds] = useState<string[]>([]);
@@ -270,7 +271,11 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
       try {
         if (cutout) {
           toast({ title: '正在抠图', description: '正在去除背景，请稍候…' });
-          const blob = await removeImageBackground(file, false, true);
+          const blob = await removeImageBackground(
+            file,
+            bgRemovalConfig?.useWebGPU === true,
+            bgRemovalConfig?.highQuality !== false
+          );
           if (blob) {
             finalFile = new File([blob], file.name.replace(/\.(jpg|jpeg|png|webp)$/i, '') + '.png', { type: 'image/png' });
           }
@@ -429,7 +434,11 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
       try {
         if (cutout) {
           toast({ title: '正在抠图', description: '正在去除背景，请稍候…' });
-          const blob = await removeImageBackground(file, false, true);
+          const blob = await removeImageBackground(
+            file,
+            bgRemovalConfig?.useWebGPU === true,
+            bgRemovalConfig?.highQuality !== false
+          );
           if (blob) {
             finalFile = new File([blob], file.name.replace(/\.(jpg|jpeg|png|webp)$/i, '') + '.png', { type: 'image/png' });
           }

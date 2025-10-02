@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ProcessedImage, ServiceSelection, DeviceImages, RepairService } from '@/types/repair';
 import { toast } from '@/hooks/use-toast';
+import JSZip from 'jszip';
 import { ALL_SERVICES } from '@/data/services';
 import { useObjectURLs } from '@/hooks/useObjectURLs';
 
@@ -204,6 +205,59 @@ const detectDrawableBounds = (drawable: HTMLCanvasElement | HTMLImageElement, al
     }
   }
   if (maxX === -1 || maxY === -1) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+};
+
+// Detect bounds on opaque white background images by thresholding RGB.
+const detectWhiteBgBounds = (
+  drawable: HTMLCanvasElement | HTMLImageElement,
+  threshold: number = 240,
+  pad: number = 0,
+): ContentBounds | null => {
+  const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+  const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+  if (sw === 0 || sh === 0) return null;
+
+  const tmp = document.createElement('canvas');
+  tmp.width = sw;
+  tmp.height = sh;
+  const ctx = tmp.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(drawable, 0, 0, sw, sh);
+  const { data } = ctx.getImageData(0, 0, sw, sh);
+
+  let minX = sw, minY = sh, maxX = -1, maxY = -1;
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const idx = (y * sw + x) * 4;
+      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+      const a = data[idx + 3];
+      // foreground: 非近白 且 具有一定不透明度（避免把透明区当内容）
+      const isWhite = (r >= threshold && g >= threshold && b >= threshold);
+      const isContent = (a > 10) && !isWhite;
+      if (isContent) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX === -1 || maxY === -1) return null;
+  if (pad >= 0) {
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(sw - 1, maxX + pad);
+    maxY = Math.min(sh - 1, maxY + pad);
+  } else {
+    const shrink = -pad;
+    minX = Math.min(Math.max(0, minX + shrink), sw - 2);
+    minY = Math.min(Math.max(0, minY + shrink), sh - 2);
+    maxX = Math.max(1, Math.min(sw - 1, maxX - shrink));
+    maxY = Math.max(1, Math.min(sh - 1, maxY - shrink));
+    if (maxX <= minX) maxX = Math.min(sw - 1, minX + 1);
+    if (maxY <= minY) maxY = Math.min(sh - 1, minY + 1);
+  }
   return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
 };
 
@@ -785,18 +839,43 @@ const composeFinalLayout = async (
 
   // Draw left-side part by absolute target width and left offset (in canvas coordinates),
   // while clamping into the left column region.
-  const drawDrawableByWidth = (
-    drawable: HTMLCanvasElement | HTMLImageElement,
-    regionX: number,
-    regionWidth: number,
-    targetWidth: number,
-    desiredCanvasDx: number,
-  ) => {
-    const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
-    const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
-    if (sw === 0 || sh === 0) return;
+const expandBoundsPx = (b: ContentBounds, padPx: number, sw: number, sh: number): ContentBounds => {
+  if (!padPx) return b;
+  if (padPx > 0) {
+    const minX = Math.max(0, b.x - padPx);
+    const minY = Math.max(0, b.y - padPx);
+    const maxX = Math.min(sw - 1, b.x + b.width - 1 + padPx);
+    const maxY = Math.min(sh - 1, b.y + b.height - 1 + padPx);
+    return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+  } else {
+    const s = -padPx;
+    const minX = Math.min(Math.max(0, b.x + s), sw - 2);
+    const minY = Math.min(Math.max(0, b.y + s), sh - 2);
+    const maxX = Math.max(1, Math.min(sw - 1, b.x + b.width - 1 - s));
+    const maxY = Math.max(1, Math.min(sh - 1, b.y + b.height - 1 - s));
+    return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+  }
+};
 
-    const bounds = detectDrawableBounds(drawable) ?? { x: 0, y: 0, width: sw, height: sh };
+const drawDrawableByWidth = (
+  drawable: HTMLCanvasElement | HTMLImageElement,
+  regionX: number,
+  regionWidth: number,
+  targetWidth: number,
+  desiredCanvasDx: number,
+  opts?: { whiteBgCrop?: boolean; whiteThreshold?: number; whitePad?: number; cropPadPx?: number }
+) => {
+  const sw = drawable instanceof HTMLImageElement ? (drawable.naturalWidth || drawable.width) : drawable.width;
+  const sh = drawable instanceof HTMLImageElement ? (drawable.naturalHeight || drawable.height) : drawable.height;
+  if (sw === 0 || sh === 0) return;
+
+  let bounds = (opts?.whiteBgCrop ? (detectWhiteBgBounds(drawable, opts?.whiteThreshold ?? 240, opts?.whitePad ?? 0) || null) : null)
+    ?? detectDrawableBounds(drawable)
+    ?? { x: 0, y: 0, width: sw, height: sh };
+
+  if (opts?.cropPadPx) {
+    bounds = expandBoundsPx(bounds, opts.cropPadPx, sw, sh);
+  }
 
     const scaleW = targetWidth / bounds.width;
     const scaledW = targetWidth;
@@ -866,7 +945,16 @@ const composeFinalLayout = async (
     const offsetCanvasRatio = Math.max(0, Math.min(1, sLayout.leftCanvasOffsetRatioX ?? 0.10));
     const targetW = Math.floor(OUTPUT_SIZE * widthCanvasRatio);
     const desiredDx = Math.floor(OUTPUT_SIZE * offsetCanvasRatio);
-    drawDrawableByWidth(baseCanvas, 0, columnWidth, targetW, desiredDx);
+    const isDual = service.id.startsWith('dual-preview-front') || service.id.startsWith('dual-preview-back');
+    // 白底自动裁剪：阈值 248，并在裁剪后四周留白 10px（cropPadPx）
+    drawDrawableByWidth(
+      baseCanvas,
+      0,
+      columnWidth,
+      targetW,
+      desiredDx,
+      isDual ? { whiteBgCrop: true, whiteThreshold: 248, whitePad: 0, cropPadPx: 10 } : undefined
+    );
   } else {
     const leftHeightRatio = Math.max(0.05, Math.min(1, sLayout.leftHeightRatio ?? 0.80));
     const leftTargetHeight = Math.floor(OUTPUT_SIZE * leftHeightRatio);
@@ -1101,37 +1189,54 @@ export const useImageProcessing = () => {
   }, []);
 
   const downloadApprovedImages = useCallback(async (sku: string) => {
-    const approvedImages = processedImages.filter(img => img.approved);
-    
-    if (approvedImages.length === 0) {
+    const chosen = processedImages.filter(img => img.approved);
+    const images = chosen.length > 0 ? chosen : processedImages;
+
+    if (images.length === 0) {
       toast({
-        title: "Sin imágenes aprobadas",
-        description: "No hay imágenes aprobadas para descargar.",
-        variant: "destructive"
+        title: '没有可下载的图片',
+        description: '请先生成或勾选需要下载的图片。',
+        variant: 'destructive'
       });
       return;
     }
 
     try {
-      // In a real application, this would create a proper ZIP file
-      // For demo purposes, we'll simulate the download
-      toast({
-        title: "Descarga iniciada",
-        description: `Descargando ${approvedImages.length} imágenes como ${sku}.zip`,
-      });
+      const zip = new JSZip();
+      const folder = zip.folder(sku && sku.trim() ? sku.trim() : 'images')!;
 
-      // Simulate download delay
-      setTimeout(() => {
-        toast({
-          title: "Descarga completada",
-          description: `${sku}.zip descargado correctamente.`,
-        });
-      }, 2000);
-    } catch (error) {
+      // fetch each objectURL into Blob and add to zip
+      await Promise.all(images.map(async (img, idx) => {
+        try {
+          const res = await fetch(img.processedImage);
+          const blob = await res.blob();
+          const fname = `${String(idx + 1).padStart(2, '0')}_${img.serviceId.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
+          folder.file(fname, blob);
+        } catch (e) {
+          console.warn('Skip adding image due to fetch error', img.serviceId, e);
+        }
+      }));
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sku && sku.trim() ? sku.trim() : 'images'}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
       toast({
-        title: "Error en la descarga",
-        description: "Hubo un error al generar el archivo ZIP.",
-        variant: "destructive"
+        title: '打包完成',
+        description: `已下载 ${images.length} 张图片`,
+      });
+    } catch (error) {
+      console.error('Zip error', error);
+      toast({
+        title: '压缩失败',
+        description: '生成 ZIP 时出现问题。',
+        variant: 'destructive'
       });
     }
   }, [processedImages]);
