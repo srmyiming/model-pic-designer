@@ -957,14 +957,25 @@ const drawDrawableByWidth = (
     const targetW = Math.floor(OUTPUT_SIZE * widthCanvasRatio);
     const desiredDx = Math.floor(OUTPUT_SIZE * offsetCanvasRatio);
     const isDual = service.id.startsWith('dual-preview-front') || service.id.startsWith('dual-preview-back');
-    // 白底自动裁剪：阈值 248，并在裁剪后四周留白 10px（cropPadPx）
+    const leftWhiteBgCropFlag = typeof sLayout.leftWhiteBgCrop === 'boolean'
+      ? sLayout.leftWhiteBgCrop
+      : isDual;
+    const whiteCropOptions = leftWhiteBgCropFlag
+      ? {
+          whiteBgCrop: true,
+          whiteThreshold: sLayout.leftWhiteBgCropThreshold ?? 248,
+          whitePad: sLayout.leftWhiteBgCropPad ?? 0,
+          cropPadPx: sLayout.leftWhiteBgCropPadPx ?? 10,
+        }
+      : undefined;
+
     drawDrawableByWidth(
       baseCanvas,
       0,
       columnWidth,
       targetW,
       desiredDx,
-      isDual ? { whiteBgCrop: true, whiteThreshold: 248, whitePad: 0, cropPadPx: 10 } : undefined
+      whiteCropOptions
     );
   } else {
     const leftHeightRatio = Math.max(0.05, Math.min(1, sLayout.leftHeightRatio ?? 0.80));
@@ -1252,10 +1263,93 @@ export const useImageProcessing = () => {
     }
   }, [processedImages]);
 
+  // 双图别管模式：根据 pairs 与参数批量生成
+  const processDualFreePairs = useCallback(async (
+    pairs: { left: File; right: File }[],
+    params: {
+      leftWidth: number;
+      leftOffset: number;
+      rightHeight: number;
+      whiteCrop: boolean;
+      cutoutLeft: boolean;
+      cutoutRight: boolean;
+      useBack?: boolean;
+    },
+    sku?: string,
+    showSkuOnImage?: boolean
+  ) => {
+    revokeAll();
+    setIsProcessing(true);
+    setProcessedImages([]);
+    setNormalizedBounds(null);
+
+    try {
+      const baseServiceModule = params.useBack
+        ? await import('@/data/services/dualPreviewBackService')
+        : await import('@/data/services/dualPreviewService');
+      const baseService: RepairService = params.useBack
+        ? baseServiceModule.dualPreviewBackService
+        : baseServiceModule.dualPreviewService;
+      const baseId = params.useBack ? 'dual-preview-back' : 'dual-preview-front';
+
+      for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i];
+
+        const runtimeService: RepairService = {
+          ...baseService,
+          id: `${baseId}-dual-free-${i + 1}`,
+          layout: {
+            ...(baseService.layout as any),
+            type: 'side-by-side',
+            leftWidthCanvasRatio: params.leftWidth,
+            leftCanvasOffsetRatioX: params.leftOffset,
+            rightHeightRatio: params.rightHeight,
+            leftWhiteBgCrop: !params.cutoutLeft && params.whiteCrop,
+            leftWhiteBgCropThreshold: (baseService.layout as any)?.leftWhiteBgCropThreshold ?? 248,
+            leftWhiteBgCropPad: (baseService.layout as any)?.leftWhiteBgCropPad ?? 0,
+            leftWhiteBgCropPadPx: (baseService.layout as any)?.leftWhiteBgCropPadPx ?? 10,
+          } as any,
+        } as RepairService;
+
+        const baseCanvas = await renderBaseCanvas(
+          pair.left,
+          runtimeService,
+          null,
+          (b) => b
+        );
+
+        const processedImageUrl = await composeFinalLayout(
+          runtimeService,
+          baseCanvas,
+          pair.right,
+          null,
+          createObjectURL,
+          sku,
+          showSkuOnImage
+        );
+
+        const originalLeftUrl = createObjectURL(pair.left);
+        setProcessedImages(prev => ([...prev, {
+          serviceId: runtimeService.id,
+          originalImage: originalLeftUrl,
+          processedImage: processedImageUrl,
+          approved: false,
+        }]));
+      }
+      toast({ title: '生成完成', description: `已生成 ${pairs.length} 张图片。` });
+    } catch (e) {
+      console.error('dual-free generate error', e);
+      toast({ title: '生成失败', description: '双图别管模式生成出现问题。', variant: 'destructive' });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [revokeAll, createObjectURL]);
+
   return {
     processedImages,
     isProcessing,
     processImages,
+    processDualFreePairs,
     updateImageApproval,
     downloadApprovedImages,
   };

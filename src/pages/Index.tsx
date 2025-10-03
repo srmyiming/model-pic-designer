@@ -4,6 +4,7 @@ import { Progress } from '@/components/ui/progress';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ServiceSelector } from '@/components/ServiceSelector';
 import { ProcessingPreview } from '@/components/ProcessingPreview';
+import { DualFreeStep } from '@/components/DualFreeStep';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
 import { DeviceImages, ServiceSelection, BackgroundRemovalConfig } from '@/types/repair';
 import { BackgroundRemovalSettings } from '@/components/BackgroundRemovalSettings';
@@ -38,6 +39,17 @@ const Index = () => {
   const [dualPreviewBackImage, setDualPreviewBackImage] = useState<File | null>(null);
   const [showDualFront, setShowDualFront] = useState<boolean>(false);
   const [showDualBack, setShowDualBack] = useState<boolean>(false);
+  // 双图别管模式
+  const [dualFreeActive, setDualFreeActive] = useState<boolean>(false);
+  const [dualFreeLeftFiles, setDualFreeLeftFiles] = useState<File[]>([]);
+  const [dualFreeRightFile, setDualFreeRightFile] = useState<File | null>(null);
+  const [dualFreeCutoutLeft, setDualFreeCutoutLeft] = useState<boolean>(false);
+  const [dualFreeCutoutRight, setDualFreeCutoutRight] = useState<boolean>(true);
+  const [dualFreeWhiteCrop, setDualFreeWhiteCrop] = useState<boolean>(true);
+  const [dualFreeLeftWidth, setDualFreeLeftWidth] = useState<number>(0.44);
+  const [dualFreeLeftOffset, setDualFreeLeftOffset] = useState<number>(0.04);
+  const [dualFreeRightHeight, setDualFreeRightHeight] = useState<number>(0.80);
+  const [dualFreeRequested, setDualFreeRequested] = useState<boolean>(false);
 
   // 注意：双图卡的选择/预览由 ServiceSelector 的多实例逻辑统一维护
   // 这里不再写入 selections 的 'dual-preview-front/back' 基础条目，避免重复生成。
@@ -46,6 +58,7 @@ const Index = () => {
     processedImages,
     isProcessing,
     processImages,
+    processDualFreePairs,
     updateImageApproval,
     downloadApprovedImages,
   } = useImageProcessing();
@@ -62,19 +75,21 @@ const Index = () => {
         // 步骤1: 不再要求品牌与型号，直接允许
         return true;
       case 2:
-        // 步骤2: 检查服务选择完整性
-        const hasSelection = Object.values(selections).some(s => s.isSelected);
-        if (!hasSelection) return false;
-
-        // Check if all selected services that need part images have them uploaded or have default
-        const selectedServices = Object.values(selections).filter(s => s.isSelected);
-        for (const sel of selectedServices) {
-          const serviceConfig = ALL_SERVICES.find(s => s.id === sel.serviceId);
-          if (serviceConfig?.needsPartImage && !sel.customImage && !serviceConfig.defaultPartImage) {
-            return false; // Has selected service that needs image but hasn't uploaded and has no default
+        if (dualFreeActive) {
+          return dualFreeLeftFiles.length > 0 && !!dualFreeRightFile;
+        } else {
+          // 服务卡模式校验
+          const hasSelection = Object.values(selections).some(s => s.isSelected);
+          if (!hasSelection) return false;
+          const selectedServices = Object.values(selections).filter(s => s.isSelected);
+          for (const sel of selectedServices) {
+            const serviceConfig = ALL_SERVICES.find(s => s.id === sel.serviceId);
+            if (serviceConfig?.needsPartImage && !sel.customImage && !serviceConfig.defaultPartImage) {
+              return false;
+            }
           }
+          return true;
         }
-        return true;
       default:
         return true;
     }
@@ -86,9 +101,24 @@ const Index = () => {
         // Show SKU input dialog after step 1 (upload)
         setShowSkuDialog(true);
       } else if (currentStep === 1) {
-        // From step 2 (service selection) to step 3 (preview), start processing
+        // From step 2 to step 3
         setCurrentStep(2);
-        processImages(deviceImages, selections, sku, showSkuOnImage);
+        if (dualFreeActive) {
+          const pairs = dualFreeLeftFiles
+            .filter(Boolean)
+            .map(f => ({ left: f, right: dualFreeRightFile! }))
+            .filter(p => p.right);
+          processDualFreePairs(pairs, {
+            leftWidth: dualFreeLeftWidth,
+            leftOffset: dualFreeLeftOffset,
+            rightHeight: dualFreeRightHeight,
+            whiteCrop: dualFreeWhiteCrop,
+            cutoutLeft: dualFreeCutoutLeft,
+            cutoutRight: dualFreeCutoutRight,
+          }, sku, showSkuOnImage);
+        } else {
+          processImages(deviceImages, selections, sku, showSkuOnImage);
+        }
       } else {
         setCurrentStep(currentStep + 1);
       }
@@ -101,6 +131,16 @@ const Index = () => {
     setSelections({});
     setCurrentStep(0);
     setShowSkuDialog(false);
+    setDualFreeActive(false);
+    setDualFreeRequested(false);
+    setDualFreeLeftFiles([]);
+    setDualFreeRightFile(null);
+    setDualFreeCutoutLeft(false);
+    setDualFreeCutoutRight(true);
+    setDualFreeWhiteCrop(true);
+    setDualFreeLeftWidth(0.44);
+    setDualFreeLeftOffset(0.04);
+    setDualFreeRightHeight(0.80);
     // 保留已上传的正/背面图，便于继续处理；如需一并清空，请取消注释：
     // setDeviceImages({ front: null, back: null });
     // 强制刷新首页，确保所有状态/对象URL彻底重置
@@ -119,6 +159,12 @@ const Index = () => {
       return;
     }
     setShowSkuDialog(false);
+    if (dualFreeRequested) {
+      setDualFreeActive(true);
+      setDualFreeRequested(false);
+    } else if (currentStep === 0) {
+      setDualFreeActive(false);
+    }
     // After SKU input in step 1, go to step 2 (service selection)
     setCurrentStep(1);
   };
@@ -226,6 +272,23 @@ const Index = () => {
               config={bgRemovalConfig}
               onChange={setBgRemovalConfig}
             />
+            <div className="mt-4 flex items-center justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDualFreeRequested(true);
+                  if (!sku.trim()) {
+                    setShowSkuDialog(true);
+                    return;
+                  }
+                  setDualFreeActive(true);
+                  setCurrentStep(1);
+                  setDualFreeRequested(false);
+                }}
+              >
+                双图别管模式
+              </Button>
+            </div>
             <ImageUploader
               deviceImages={deviceImages}
               onImagesChange={setDeviceImages}
@@ -235,22 +298,42 @@ const Index = () => {
           </>
         );
       case 1:
-        return (
-            <ServiceSelector
-              selections={selections}
-              onSelectionChange={setSelections}
-              frontImage={deviceImages.front}
-              dualPreviewImage={dualPreviewImage}
-              onDualPreviewChange={setDualPreviewImage}
-              backImage={deviceImages.back}
-              dualPreviewBackImage={dualPreviewBackImage}
-              onDualPreviewBackChange={setDualPreviewBackImage}
-              showDualFront={showDualFront}
-              showDualBack={showDualBack}
-              onShowDualFront={setShowDualFront}
-              onShowDualBack={setShowDualBack}
-              bgRemovalConfig={bgRemovalConfig}
-            />
+        return dualFreeActive ? (
+          <DualFreeStep
+            bgRemovalConfig={bgRemovalConfig}
+            leftFiles={dualFreeLeftFiles}
+            setLeftFiles={setDualFreeLeftFiles}
+            rightFile={dualFreeRightFile}
+            setRightFile={setDualFreeRightFile}
+            cutoutLeft={dualFreeCutoutLeft}
+            setCutoutLeft={setDualFreeCutoutLeft}
+            cutoutRight={dualFreeCutoutRight}
+            setCutoutRight={setDualFreeCutoutRight}
+            whiteCrop={dualFreeWhiteCrop}
+            setWhiteCrop={setDualFreeWhiteCrop}
+            leftWidth={dualFreeLeftWidth}
+            setLeftWidth={setDualFreeLeftWidth}
+            leftOffset={dualFreeLeftOffset}
+            setLeftOffset={setDualFreeLeftOffset}
+            rightHeight={dualFreeRightHeight}
+            setRightHeight={setDualFreeRightHeight}
+          />
+        ) : (
+          <ServiceSelector
+            selections={selections}
+            onSelectionChange={setSelections}
+            frontImage={deviceImages.front}
+            dualPreviewImage={dualPreviewImage}
+            onDualPreviewChange={setDualPreviewImage}
+            backImage={deviceImages.back}
+            dualPreviewBackImage={dualPreviewBackImage}
+            onDualPreviewBackChange={setDualPreviewBackImage}
+            showDualFront={showDualFront}
+            showDualBack={showDualBack}
+            onShowDualFront={setShowDualFront}
+            onShowDualBack={setShowDualBack}
+            bgRemovalConfig={bgRemovalConfig}
+          />
         );
       case 2:
         return (
@@ -338,7 +421,13 @@ const Index = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSkuDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSkuDialog(false);
+                setDualFreeRequested(false);
+              }}
+            >
               取消
             </Button>
             <Button onClick={handleSkuSubmit}>

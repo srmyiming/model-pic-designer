@@ -29,6 +29,13 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
   // 多实例支持：本地维护实例ID列表
   const [frontIds, setFrontIds] = useState<string[]>([]);
   const [backIds, setBackIds] = useState<string[]>([]);
+  const [dualFreeMode, setDualFreeMode] = useState<boolean>(() => {
+    try { return sessionStorage.getItem('dualFreeMode') === 'true'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    try { sessionStorage.setItem('dualFreeMode', String(dualFreeMode)); } catch {}
+  }, [dualFreeMode]);
 
   const makeId = (base: 'dual-preview-front'|'dual-preview-back') => `${base}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
 
@@ -576,6 +583,17 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
           onClick={() => setBackIds(ids => [...ids, makeId('dual-preview-back')])}
         >
           添加双图·背面
+        </Button>
+        <Button
+          variant={dualFreeMode ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => {
+            const next = !dualFreeMode;
+            setDualFreeMode(next);
+            toast({ title: next ? '双图别管模式：开启' : '双图别管模式：关闭', description: '当前为占位开关，生成逻辑暂未绑定。' });
+          }}
+        >
+          双图别管模式
         </Button>
       </div>
 
