@@ -39,77 +39,8 @@ const Index = () => {
   const [showDualFront, setShowDualFront] = useState<boolean>(false);
   const [showDualBack, setShowDualBack] = useState<boolean>(false);
 
-  useEffect(() => {
-    setSelections(prev => {
-      const source = showDualFront ? (dualPreviewImage ?? deviceImages.front) : null;
-      const current = prev['dual-preview-front'];
-
-      if (!source) {
-        if (!current) {
-          return prev;
-        }
-        if (current.customPreviewUrl) {
-          try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
-        }
-        const { ['dual-preview-front']: _, ...rest } = prev;
-        return rest;
-      }
-
-      if (current?.customImage === source && current.customPreviewUrl) {
-        return prev;
-      }
-
-      const preview = URL.createObjectURL(source);
-      if (current?.customPreviewUrl) {
-        try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
-      }
-
-      return {
-        ...prev,
-        ['dual-preview-front']: {
-          serviceId: 'dual-preview-front',
-          customImage: source,
-          customPreviewUrl: preview,
-          isSelected: current?.isSelected ?? false,
-        },
-      };
-    });
-  }, [showDualFront, dualPreviewImage, deviceImages.front]);
-
-  useEffect(() => {
-    setSelections(prev => {
-      const source = showDualBack ? (dualPreviewBackImage ?? deviceImages.back) : null;
-      const current = prev['dual-preview-back'];
-
-      if (!source) {
-        if (!current) return prev;
-        if (current.customPreviewUrl) {
-          try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
-        }
-        const { ['dual-preview-back']: _, ...rest } = prev;
-        return rest;
-      }
-
-      if (current?.customImage === source && current.customPreviewUrl) {
-        return prev;
-      }
-
-      const preview = URL.createObjectURL(source);
-      if (current?.customPreviewUrl) {
-        try { URL.revokeObjectURL(current.customPreviewUrl); } catch {}
-      }
-
-      return {
-        ...prev,
-        ['dual-preview-back']: {
-          serviceId: 'dual-preview-back',
-          customImage: source,
-          customPreviewUrl: preview,
-          isSelected: current?.isSelected ?? false,
-        },
-      };
-    });
-  }, [showDualBack, dualPreviewBackImage, deviceImages.back]);
+  // 注意：双图卡的选择/预览由 ServiceSelector 的多实例逻辑统一维护
+  // 这里不再写入 selections 的 'dual-preview-front/back' 基础条目，避免重复生成。
 
   const {
     processedImages,

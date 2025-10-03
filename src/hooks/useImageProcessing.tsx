@@ -7,7 +7,7 @@ import { useObjectURLs } from '@/hooks/useObjectURLs';
 
 const OUTPUT_SIZE = 800;
 
-interface ContentBounds {
+export interface ContentBounds {
   x: number;
   y: number;
   width: number;
@@ -209,6 +209,32 @@ const detectDrawableBounds = (drawable: HTMLCanvasElement | HTMLImageElement, al
 };
 
 // Detect bounds on opaque white background images by thresholding RGB.
+export const computeWhiteBgBoundsFromImageData = (
+  data: Uint8ClampedArray,
+  sw: number,
+  sh: number,
+  threshold: number = 240,
+): ContentBounds | null => {
+  let minX = sw, minY = sh, maxX = -1, maxY = -1;
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const idx = (y * sw + x) * 4;
+      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+      const a = data[idx + 3];
+      const isWhite = (r >= threshold && g >= threshold && b >= threshold);
+      const isContent = (a > 10) && !isWhite;
+      if (isContent) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX === -1 || maxY === -1) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+};
+
 const detectWhiteBgBounds = (
   drawable: HTMLCanvasElement | HTMLImageElement,
   threshold: number = 240,
@@ -225,25 +251,10 @@ const detectWhiteBgBounds = (
   if (!ctx) return null;
   ctx.drawImage(drawable, 0, 0, sw, sh);
   const { data } = ctx.getImageData(0, 0, sw, sh);
-
-  let minX = sw, minY = sh, maxX = -1, maxY = -1;
-  for (let y = 0; y < sh; y++) {
-    for (let x = 0; x < sw; x++) {
-      const idx = (y * sw + x) * 4;
-      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-      const a = data[idx + 3];
-      // foreground: 非近白 且 具有一定不透明度（避免把透明区当内容）
-      const isWhite = (r >= threshold && g >= threshold && b >= threshold);
-      const isContent = (a > 10) && !isWhite;
-      if (isContent) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-  if (maxX === -1 || maxY === -1) return null;
+  const core = computeWhiteBgBoundsFromImageData(data, sw, sh, threshold);
+  if (!core) return null;
+  let { x: minX, y: minY, width, height } = core;
+  let maxX = minX + width - 1, maxY = minY + height - 1;
   if (pad >= 0) {
     minX = Math.max(0, minX - pad);
     minY = Math.max(0, minY - pad);
