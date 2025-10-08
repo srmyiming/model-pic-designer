@@ -119,6 +119,7 @@ export interface ServiceSelection {
   serviceId: string;             // 关联的服务 ID
   customImage?: File;            // 可选：该服务需要的配件图
   customPreviewUrl?: string;     // 可选：该配件图的预览 URL（ObjectURL）
+  customTitle?: string;          // 可选：自定义服务名称（用于覆盖默认标题）
   isSelected: boolean;           // 是否被用户勾选
 }
 

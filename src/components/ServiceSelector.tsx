@@ -8,6 +8,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
+import { Input } from '@/components/ui/input';
 
 interface ServiceSelectorProps {
   selections: Record<string, ServiceSelection>;
@@ -23,9 +24,11 @@ interface ServiceSelectorProps {
   onShowDualFront: (value: boolean) => void;
   onShowDualBack: (value: boolean) => void;
   bgRemovalConfig?: BackgroundRemovalConfig; // 传入步骤1的设置，用于“上传时抠图”
+  writeServiceNameOnImage: boolean;
+  onWriteServiceNameOnImageChange: (value: boolean) => void;
 }
 
-export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dualPreviewImage, onDualPreviewChange, backImage, dualPreviewBackImage, onDualPreviewBackChange, showDualFront, showDualBack, onShowDualFront, onShowDualBack, bgRemovalConfig }: ServiceSelectorProps) => {
+export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dualPreviewImage, onDualPreviewChange, backImage, dualPreviewBackImage, onDualPreviewBackChange, showDualFront, showDualBack, onShowDualFront, onShowDualBack, bgRemovalConfig, writeServiceNameOnImage, onWriteServiceNameOnImageChange }: ServiceSelectorProps) => {
   // 多实例支持：本地维护实例ID列表
   const [frontIds, setFrontIds] = useState<string[]>([]);
   const [backIds, setBackIds] = useState<string[]>([]);
@@ -53,6 +56,7 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
         serviceId: service.id,
         customImage: current?.customImage,
         customPreviewUrl: current?.customPreviewUrl,
+        customTitle: current?.customTitle,
         isSelected: !(current?.isSelected ?? false),
       };
       return {
@@ -91,6 +95,7 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
           serviceId: service.id,
           customImage: existing?.customImage,
           customPreviewUrl: existing?.customPreviewUrl,
+          customTitle: existing?.customTitle,
           isSelected: !allImplementedSelected,
         };
       });
@@ -110,6 +115,7 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
         serviceId,
         customImage: file,
         customPreviewUrl: preview,
+        customTitle: prev[serviceId]?.customTitle,
         isSelected: true,
       },
     }));
@@ -127,9 +133,26 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
     const isSelected = selections[service.id]?.isSelected || false;
     const hasCustomImage = selections[service.id]?.customImage;
     const previewUrl = selections[service.id]?.customPreviewUrl || '';
+    const displayTitle = selections[service.id]?.customTitle ?? service.title;
     // 允许 'rear-camera' 当作已实现使用
     const isImplemented = service.implemented === true || service.id === 'rear-camera';
     const inputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleTitleChange = (value: string) => {
+      onSelectionChange(prev => {
+        const current = prev[service.id];
+        return {
+          ...prev,
+          [service.id]: {
+            serviceId: service.id,
+            customImage: current?.customImage,
+            customPreviewUrl: current?.customPreviewUrl,
+            customTitle: value,
+            isSelected: current?.isSelected ?? false,
+          },
+        };
+      });
+    };
 
     return (
       <Card
@@ -146,7 +169,7 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
             <div className="relative aspect-square rounded overflow-hidden bg-muted">
               <img
                 src={service.thumbnail}
-                alt={service.titleCN}
+                alt={displayTitle}
                 className={`w-full h-full object-cover ${!isImplemented ? 'grayscale opacity-50' : ''}`}
               />
 
@@ -187,10 +210,14 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
             </div>
 
             {/* 服务信息 */}
-            <div className="space-y-0.5">
-              <h3 className="font-semibold text-xs leading-tight line-clamp-2">
-                {service.titleCN}
-              </h3>
+            <div className="space-y-1">
+              <Input
+                value={displayTitle}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Nombre del servicio"
+                className="h-7 text-xs"
+              />
             </div>
 
             {/* 上传配件图 */}
@@ -618,6 +645,22 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-muted/30 bg-muted/20 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="write-service-text"
+            checked={writeServiceNameOnImage}
+            onCheckedChange={(checked) => onWriteServiceNameOnImageChange(!!checked)}
+          />
+          <label htmlFor="write-service-text" className="text-sm cursor-pointer select-none">
+            在白底图上写入服务卡标题
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground sm:text-right">
+          勾选后会把上方输入框中的标题绘制在左侧白底区域。
+        </p>
+      </div>
+
       {missingImages.length > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
@@ -628,9 +671,12 @@ export const ServiceSelector = ({ selections, onSelectionChange, frontImage, dua
                 以下已选择的产品需要上传白底图才能生成：
               </p>
               <ul className="text-sm text-yellow-800 list-disc list-inside space-y-1">
-                {missingImages.map(service => (
-                  <li key={service.id}>{service.titleCN}</li>
-                ))}
+                {missingImages.map(service => {
+                  const custom = selections[service.id]?.customTitle?.trim();
+                  return (
+                    <li key={service.id}>{custom && custom.length > 0 ? custom : service.title}</li>
+                  );
+                })}
               </ul>
             </div>
           </div>
