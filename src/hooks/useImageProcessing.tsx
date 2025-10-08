@@ -498,6 +498,91 @@ const drawSkuText = (ctx: CanvasRenderingContext2D, sku: string) => {
   ctx.fillText(sku, OUTPUT_SIZE / 2, textY);
 };
 
+const wrapServiceNameLines = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const lines: string[] = [];
+  let current = '';
+
+  for (const char of normalized) {
+    const tentative = current + char;
+    if (ctx.measureText(tentative).width <= maxWidth) {
+      current = tentative;
+      continue;
+    }
+
+    if (char === ' ') {
+      if (current.trim()) lines.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    const lastSpace = current.lastIndexOf(' ');
+    if (lastSpace !== -1) {
+      const line = current.slice(0, lastSpace).trim();
+      if (line) lines.push(line);
+      current = current.slice(lastSpace + 1) + char;
+    } else {
+      if (current.trim()) lines.push(current.trim());
+      current = char;
+    }
+  }
+
+  if (current.trim()) lines.push(current.trim());
+  return lines;
+};
+
+const drawServiceName = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  area: { x: number; y: number; width: number; height: number }
+) => {
+  const content = text.replace(/\s+/g, ' ').trim();
+  if (!content) return;
+  ctx.save();
+
+  const marginX = Math.min(area.width * 0.12, 48);
+  const marginBottom = Math.min(area.height * 0.35, 80);
+  const availableWidth = Math.max(32, area.width - marginX * 2);
+  const availableHeight = Math.max(24, area.height - marginBottom * 0.5);
+
+  let fontSize = Math.min(32, Math.max(18, area.width * 0.08));
+  const minFontSize = 12;
+  let lines: string[] = [];
+
+  while (fontSize >= minFontSize) {
+    ctx.font = `600 ${fontSize}px "Noto Sans", "Segoe UI", Arial, sans-serif`;
+    lines = wrapServiceNameLines(ctx, content, availableWidth);
+    if (lines.length === 0) {
+      lines = [content];
+    }
+    const maxLineWidth = Math.max(...lines.map(line => ctx.measureText(line).width), 0);
+    const lineHeight = fontSize * 1.25;
+    const totalHeight = lineHeight * lines.length;
+
+    if (maxLineWidth <= availableWidth && totalHeight <= availableHeight) {
+      break;
+    }
+    fontSize -= 2;
+  }
+
+  ctx.font = `600 ${fontSize}px "Noto Sans", "Segoe UI", Arial, sans-serif`;
+  ctx.fillStyle = '#111827';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const lineHeight = fontSize * 1.25;
+  const totalHeight = lineHeight * lines.length;
+  const baseY = Math.max(area.y + fontSize, area.y + area.height - marginBottom - totalHeight + lineHeight / 2);
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], area.x + area.width / 2, baseY + i * lineHeight);
+  }
+
+  ctx.restore();
+};
+
 const composeFinalLayout = async (
   service: RepairService,
   baseCanvas: HTMLCanvasElement,
@@ -505,7 +590,9 @@ const composeFinalLayout = async (
   normalizedBounds: NormalizedBounds | null,
   createURL: (blob: Blob) => string,
   sku?: string,
-  showSkuOnImage?: boolean
+  showSkuOnImage?: boolean,
+  serviceName?: string,
+  writeServiceNameOnImage?: boolean
 ): Promise<string> => {
   if (!service.layout) {
     return canvasToObjectUrl(baseCanvas, createURL);
@@ -519,6 +606,8 @@ const composeFinalLayout = async (
   if (!ctx) {
     return canvasToObjectUrl(baseCanvas, createURL);
   }
+
+  const trimmedServiceName = serviceName?.trim() ?? '';
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
@@ -794,6 +883,15 @@ const composeFinalLayout = async (
       }
     }
 
+    if (writeServiceNameOnImage && trimmedServiceName) {
+      drawServiceName(ctx, trimmedServiceName, {
+        x: 0,
+        y: OUTPUT_SIZE * 0.6,
+        width: OUTPUT_SIZE,
+        height: OUTPUT_SIZE * 0.35,
+      });
+    }
+
     // Draw SKU text before returning
     if (showSkuOnImage && sku && sku.trim()) {
       drawSkuText(ctx, sku);
@@ -1036,6 +1134,15 @@ const drawDrawableByWidth = (
     }
   }
 
+  if (writeServiceNameOnImage && trimmedServiceName) {
+    drawServiceName(ctx, trimmedServiceName, {
+      x: 0,
+      y: OUTPUT_SIZE * 0.6,
+      width: columnWidth,
+      height: OUTPUT_SIZE * 0.35,
+    });
+  }
+
   // Draw SKU text at the top if enabled
   if (showSkuOnImage && sku && sku.trim()) {
     drawSkuText(ctx, sku);
@@ -1054,7 +1161,8 @@ export const useImageProcessing = () => {
     deviceImages: DeviceImages,
     selections: Record<string, ServiceSelection>,
     sku?: string,
-    showSkuOnImage?: boolean
+    showSkuOnImage?: boolean,
+    writeServiceNameOnImage?: boolean
   ) => {
     // 清理之前的 ObjectURLs，避免内存泄漏
     revokeAll();
@@ -1151,6 +1259,8 @@ export const useImageProcessing = () => {
           else if (front || back) rightSideFile = (front ?? back)!; // fall back to any available model image
         }
 
+        const serviceNameForRender = selection.customTitle?.trim() || serviceConfig.title;
+
         const processedImageUrl = await composeFinalLayout(
           serviceConfig,
           baseCanvas,
@@ -1158,7 +1268,9 @@ export const useImageProcessing = () => {
           boundsRef,
           createObjectURL,
           sku,
-          showSkuOnImage
+          showSkuOnImage,
+          serviceNameForRender,
+          writeServiceNameOnImage
         );
         console.log('✅ Created processedImageUrl:', processedImageUrl, 'for service:', serviceConfig.titleCN);
 
@@ -1276,7 +1388,8 @@ export const useImageProcessing = () => {
       useBack?: boolean;
     },
     sku?: string,
-    showSkuOnImage?: boolean
+    showSkuOnImage?: boolean,
+    writeServiceNameOnImage?: boolean
   ) => {
     revokeAll();
     setIsProcessing(true);
@@ -1325,7 +1438,9 @@ export const useImageProcessing = () => {
           null,
           createObjectURL,
           sku,
-          showSkuOnImage
+          showSkuOnImage,
+          runtimeService.title,
+          writeServiceNameOnImage
         );
 
         const originalLeftUrl = createObjectURL(pair.left);

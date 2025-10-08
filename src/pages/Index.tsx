@@ -30,6 +30,7 @@ const Index = () => {
   const [showSkuDialog, setShowSkuDialog] = useState(false);
   const [sku, setSku] = useState('');
   const [showSkuOnImage, setShowSkuOnImage] = useState(false);
+  const [writeServiceNameOnImage, setWriteServiceNameOnImage] = useState(false);
   const [bgRemovalConfig, setBgRemovalConfig] = useState<BackgroundRemovalConfig>({
     enabled: true,     // 默认开启（保持现有行为）
     useWebGPU: false,  // 默认关闭（保守策略）
@@ -115,9 +116,9 @@ const Index = () => {
             whiteCrop: dualFreeWhiteCrop,
             cutoutLeft: dualFreeCutoutLeft,
             cutoutRight: dualFreeCutoutRight,
-          }, sku, showSkuOnImage);
+          }, sku, showSkuOnImage, writeServiceNameOnImage);
         } else {
-          processImages(deviceImages, selections, sku, showSkuOnImage);
+          processImages(deviceImages, selections, sku, showSkuOnImage, writeServiceNameOnImage);
         }
       } else {
         setCurrentStep(currentStep + 1);
@@ -333,6 +334,8 @@ const Index = () => {
             onShowDualFront={setShowDualFront}
             onShowDualBack={setShowDualBack}
             bgRemovalConfig={bgRemovalConfig}
+            writeServiceNameOnImage={writeServiceNameOnImage}
+            onWriteServiceNameOnImageChange={setWriteServiceNameOnImage}
           />
         );
       case 2:
